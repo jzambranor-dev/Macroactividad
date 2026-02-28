@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--
+    ╔══════════════════════════════════════════════════════════════════╗
+    ║  MÓDULO DE AUTENTICACIÓN FRONTEND — SEGURIDAD DEFENSIVA        ║
+    ║  Actividad: Construcción de módulo de autenticación frontend    ║
+    ║  Enfoque: Defense in Depth desde el lado del cliente            ║
+    ╚══════════════════════════════════════════════════════════════════╝
+
+    Arquitectura de capas:
+      Capa 0 — HTML defensivo (atributos de seguridad)
+      Capa 1 — Anti-fuerza bruta (límite de intentos)
+      Capa 2 — Higiene de datos (sanitización + detección de patrones)
+      Capa 3 — Política de clave (complejidad mínima)
+      Capa 4 — Autenticación simulada con mensajes opacos
+      Transversal — Sistema de logging / trazabilidad tipo SIEM
+  -->
+  <title>Auth Module — Seguridad Defensiva</title>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       ESTILOS — Estética "terminal / defensiva"
+       Fondo oscuro, tipografía monoespaciada, diseño limpio
+       ═══════════════════════════════════════════════════════════════ -->
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Courier New', 'Lucida Console', monospace;
+      background-color: #0a0e17;
+      color: #c8d6e5;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 1rem;
+    }
+
+    .auth-container {
+      background-color: #111927;
+      border: 1px solid #1e3a5f;
+      border-radius: 6px;
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 0 30px rgba(30, 58, 95, 0.3);
+    }
+
+    .auth-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .auth-header h1 {
+      font-size: 1.1rem;
+      color: #4fd1c5;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 0.4rem;
+    }
+
+    .auth-header p {
+      font-size: 0.7rem;
+      color: #5a6a7a;
+      letter-spacing: 1px;
+    }
+
+    .separator {
+      border: none;
+      border-top: 1px solid #1e3a5f;
+      margin: 1.2rem 0;
+    }
+
+    .form-group {
+      margin-bottom: 1.2rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.75rem;
+      color: #4fd1c5;
+      margin-bottom: 0.4rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      padding: 0.7rem 0.8rem;
+      background-color: #0a0e17;
+      border: 1px solid #1e3a5f;
+      border-radius: 4px;
+      color: #c8d6e5;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9rem;
+      transition: border-color 0.2s ease;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #4fd1c5;
+      box-shadow: 0 0 6px rgba(79, 209, 197, 0.15);
+    }
+
+    input::placeholder {
+      color: #3a4a5a;
+    }
+
+    .btn-login {
+      width: 100%;
+      padding: 0.75rem;
+      margin-top: 0.5rem;
+      background-color: #1e3a5f;
+      color: #4fd1c5;
+      border: 1px solid #4fd1c5;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.85rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-login:hover:not(:disabled) {
+      background-color: #4fd1c5;
+      color: #0a0e17;
+    }
+
+    .btn-login:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+      border-color: #5a6a7a;
+      color: #5a6a7a;
+    }
+
+    /* Área de mensajes al usuario — opaca por diseño */
+    .msg-area {
+      margin-top: 1rem;
+      padding: 0.6rem 0.8rem;
+      border-radius: 4px;
+      font-size: 0.78rem;
+      text-align: center;
+      display: none;
+      letter-spacing: 0.5px;
+    }
+
+    .msg-area.error {
+      display: block;
+      background-color: rgba(235, 87, 87, 0.12);
+      border: 1px solid #eb5757;
+      color: #eb5757;
+    }
+
+    .msg-area.success {
+      display: block;
+      background-color: rgba(79, 209, 197, 0.12);
+      border: 1px solid #4fd1c5;
+      color: #4fd1c5;
+    }
+
+    .msg-area.blocked {
+      display: block;
+      background-color: rgba(235, 87, 87, 0.2);
+      border: 1px solid #eb5757;
+      color: #eb5757;
+      font-weight: bold;
+    }
+
+    .footer-info {
+      margin-top: 1.5rem;
+      text-align: center;
+      font-size: 0.6rem;
+      color: #3a4a5a;
+      letter-spacing: 1px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       CAPA 0 — HTML DEFENSIVO
+       Atributos de seguridad aplicados directamente en el markup:
+       • autocomplete="off" → evita que el navegador almacene y sugiera
+         credenciales en campos sensibles, reduciendo la superficie de
+         ataque si el dispositivo es compartido.
+       • spellcheck="false" → impide que el corrector envíe fragmentos
+         del campo a servicios externos de revisión ortográfica.
+       • type="password" → enmascara la entrada visualmente.
+       • required → validación nativa del navegador como primera barrera.
+       • maxlength → limita la longitud de la entrada como defensa contra
+         payloads excesivamente largos.
+       ═══════════════════════════════════════════════════════════════ -->
+  <main class="auth-container" role="main">
+    <header class="auth-header">
+      <h1>[ Auth Module ]</h1>
+      <p>Secure Frontend Authentication</p>
+    </header>
+
+    <hr class="separator">
+
+    <form id="formSeguro" novalidate>
+      <div class="form-group">
+        <label for="campoUsuario">Usuario</label>
+        <input
+          type="text"
+          id="campoUsuario"
+          name="usuario"
+          placeholder="Ingrese su usuario"
+          required
+          maxlength="30"
+          autocomplete="off"
+          spellcheck="false"
+          aria-label="Nombre de usuario"
+        >
+      </div>
+
+      <div class="form-group">
+        <label for="campoClave">Contraseña</label>
+        <input
+          type="password"
+          id="campoClave"
+          name="clave"
+          placeholder="Ingrese su contraseña"
+          required
+          maxlength="64"
+          autocomplete="off"
+          spellcheck="false"
+          aria-label="Contraseña"
+        >
+      </div>
+
+      <button type="submit" id="btnLogin" class="btn-login">
+        [ Iniciar Sesión ]
+      </button>
+
+      <!-- Área de mensajes — siempre opaca, nunca revela qué campo falló -->
+      <div id="msgArea" class="msg-area" role="alert" aria-live="polite"></div>
+    </form>
+
+    <div class="footer-info">
+      Defense in Depth &middot; Frontend Layer
+    </div>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       JAVASCRIPT — LÓGICA DEFENSIVA
+       Toda la lógica de autenticación, validación y trazabilidad
+       ═══════════════════════════════════════════════════════════════ -->
+  <script>
+    'use strict';
+
+    /* ╔════════════════════════════════════════════════════════════╗
+       ║  CONFIGURACIÓN Y CONSTANTES                              ║
+       ╚════════════════════════════════════════════════════════════╝ */
+
+    // Máximo de intentos permitidos antes de bloqueo (anti-fuerza bruta)
+    const MAX_INTENTOS = 3;
+
+    // Credenciales simuladas para demostración.
+    // En un entorno real NUNCA se almacenan credenciales en el frontend.
+    // Aquí se usan únicamente con fines académicos.
+    const CREDENCIALES_DEMO = {
+      usuario: 'admin_seguro',
+      clave: 'ClaveSegura1'
+    };
+
+    // Contador de intentos fallidos consecutivos
+    let intentosFallidos = 0;
+
+    // Estado de bloqueo del sistema
+    let sistemaBloqueado = false;
+
+    // Referencias al DOM
+    const formulario = document.getElementById('formSeguro');
+    const campoUsuario = document.getElementById('campoUsuario');
+    const campoClave = document.getElementById('campoClave');
+    const btnLogin = document.getElementById('btnLogin');
+    const msgArea = document.getElementById('msgArea');
+
+
+    /* ╔════════════════════════════════════════════════════════════╗
+       ║  SISTEMA DE LOGGING / TRAZABILIDAD (Mini-SIEM)           ║
+       ║                                                           ║
+       ║  Cada evento se registra con:                             ║
+       ║   • timestamp ISO 8601                                    ║
+       ║   • nivel de severidad (info / advertencia / critico)     ║
+       ║   • usuario asociado (o "sistema")                        ║
+       ║   • detalle descriptivo                                   ║
+       ║                                                           ║
+       ║  Esto permite reconstruir la cadena de eventos en consola ║
+       ║  como haría un analista revisando logs de un SIEM.        ║
+       ╚════════════════════════════════════════════════════════════╝ */
+
+    /**
+     * Registra un evento de seguridad en consola con formato estructurado.
+     * @param {string} nivel    - 'info' | 'advertencia' | 'critico'
+     * @param {string} usuario  - Identificador del usuario o 'sistema'
+     * @param {string} detalle  - Descripción del evento
+     */
+    function registrarEvento(nivel, usuario, detalle) {
+      const timestamp = new Date().toISOString();
+      const nivelUpper = nivel.toUpperCase().padEnd(12);
+
+      const prefijo = '[AUTH-SIEM]';
+      const mensaje = `${prefijo} ${timestamp} | ${nivelUpper} | usuario: ${usuario} | ${detalle}`;
+
+      switch (nivel) {
+        case 'info':
+          console.log('%c' + mensaje, 'color: #4fd1c5');
+          break;
+        case 'advertencia':
+          console.warn('%c' + mensaje, 'color: #f2c94c');
+          break;
+        case 'critico':
+          console.error('%c' + mensaje, 'color: #eb5757; font-weight: bold');
+          break;
+        default:
+          console.log(mensaje);
+      }
+    }
+
+
+    /* ╔════════════════════════════════════════════════════════════╗
+       ║  FUNCIONES DE INTERFAZ                                    ║
+       ╚════════════════════════════════════════════════════════════╝ */
+
+    /**
+     * Muestra un mensaje al usuario en la interfaz.
+     * Los mensajes son siempre OPACOS: nunca revelan qué campo falló.
+     * @param {string} texto  - Mensaje a mostrar
+     * @param {string} tipo   - 'error' | 'success' | 'blocked'
+     */
+    function mostrarMensaje(texto, tipo) {
+      msgArea.textContent = texto;
+      msgArea.className = 'msg-area ' + tipo;
+    }
+
+    /** Oculta el mensaje de la interfaz */
+    function ocultarMensaje() {
+      msgArea.textContent = '';
+      msgArea.className = 'msg-area';
+    }
+
+    /** Bloquea la interfaz tras alcanzar el límite de intentos */
+    function bloquearInterfaz() {
+      sistemaBloqueado = true;
+      btnLogin.disabled = true;
+      campoUsuario.disabled = true;
+      campoClave.disabled = true;
+      mostrarMensaje(
+        'Acceso bloqueado — Demasiados intentos fallidos. Contacte al administrador.',
+        'blocked'
+      );
+    }
+
+
+    /* ╔════════════════════════════════════════════════════════════╗
+       ║  CAPA 1 — ANTI-FUERZA BRUTA                              ║
+       ║                                                           ║
+       ║  Limita los intentos fallidos consecutivos a MAX_INTENTOS ║
+       ║  (3 por defecto). Al alcanzar el límite:                  ║
+       ║   • Se deshabilita toda la interfaz                       ║
+       ║   • Se registra un evento CRÍTICO                         ║
+       ║   • El sistema queda en estado fail-safe (bloqueado)      ║
+       ║                                                           ║
+       ║  ¿Por qué esta capa va primero? Porque debe evaluarse     ║
+       ║  ANTES de cualquier procesamiento de datos. Si el usuario ║
+       ║  ya agotó sus intentos, no tiene sentido gastar recursos  ║
+       ║  en sanitizar o validar — se bloquea de inmediato.        ║
+       ╚════════════════════════════════════════════════════════════╝ */
+
+    /**
+     * Verifica si el sistema está bloqueado por exceso de intentos.
+     * @returns {boolean} true si está bloqueado
+     */
+    function verificarBloqueo() {
+      if (sistemaBloqueado) {
+        registrarEvento('critico', 'sistema',
+          'Intento de acceso en estado bloqueado — Acción denegada');
+        return true;
+      }
+      return false;
+    }
+
+    /**
+     * Incrementa el contador de fallos y bloquea si se alcanza el límite.
+     * @param {string} usuario - Usuario que falló
+     */
+    function registrarFallo(usuario) {
+      intentosFallidos++;
+      const restantes = MAX_INTENTOS - intentosFallidos;
+
+      registrarEvento('advertencia', usuario,
+        `Intento fallido #${intentosFallidos} de ${MAX_INTENTOS} — ` +
+        `Quedan ${restantes} intento(s)`);
+
+      if (intentosFallidos >= MAX_INTENTOS) {
+        registrarEvento('critico', usuario,
+          'Límite de intentos alcanzado — BLOQUEO ACTIVADO — ' +
+          'Posible ataque de fuerza bruta');
+        bloquearInterfaz();
+      }
+    }
+
+
+    /* ╔════════════════════════════════════════════════════════════╗
+       ║  CAPA 2 — HIGIENE DE DATOS (Sanitización)                ║
+       ║                                                           ║
+       ║  Filtra y valida las entradas ANTES de usarlas.           ║
+       ║                                                           ║
+       ║  ¿Por qué sanitizar en el frontend?                       ║
+       ║  Aunque la validación definitiva ocurre en el backend,    ║
+       ║  sanitizar aquí cumple dos funciones:                     ║
+       ║   1. Reducir ruido: evitar que payloads maliciosos        ║
+       ║      lleguen siquiera al servidor.                        ║
+       ║   2. Detección temprana: identificar y registrar          ║
+       ║      comportamientos sospechosos para trazabilidad.       ║
+       ║                                                           ║
+       ║  Estrategia: LISTA BLANCA (allowlist)                     ║
+       ║  Solo se permiten caracteres explícitamente autorizados.  ║
+       ║  Esto es más seguro que una lista negra (blocklist),      ║
+       ║  porque una blocklist puede omitir variantes de ataque    ║
+       ║  (encoding alternativo, caracteres Unicode confusos,      ║
+       ║  etc.). Con allowlist, todo lo que NO esté permitido se   ║
+       ║  rechaza automáticamente.                                 ║
+       ║                                                           ║
+       ║  Patrones detectados:                                     ║
+       ║   • Inyección SQL: OR, UNION, SELECT, DROP, --, etc.     ║
+       ║   • XSS: <script>, onerror, javascript:, etc.            ║
+       ║   • Traversal de directorios: ../, ..\                    ║
+       ║   • Inyección de comandos: ;, |, $(), backticks           ║
+       ╚════════════════════════════════════════════════════════════╝ */
+
+    // Caracteres permitidos: alfanuméricos, guion, guion bajo, punto
+    // Esto cubre nombres de usuario razonables sin abrir superficie de ataque
+    const REGEX_USUARIO_VALIDO = /^[a-zA-Z0-9_\-\.]+$/;
+
+    // Caracteres permitidos en contraseña: alfanuméricos y caracteres especiales
+    // comunes en políticas de clave, sin incluir caracteres de control o markup
+    const REGEX_CLAVE_VALIDA = /^[a-zA-Z0-9!@#$%^&*()_\-+=.,?]+$/;
+
+    // Patrones de ataque conocidos (case-insensitive)
+    const PATRONES_MALICIOSOS = [
+      /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|ALTER|CREATE)\b)/i,  // SQL
+      /(-{2}|\/\*|\*\/)/,                                              // Comentarios SQL
+      /((\bOR\b|\bAND\b)\s*[\d'"]?\s*=\s*[\d'"]\s*)/i,               // Tautologías SQL
+      /(<\s*script|<\s*img|<\s*svg|<\s*iframe)/i,                     // HTML/XSS tags
+      /(onerror|onload|onclick|onmouseover)\s*=/i,                     // Eventos XSS
+      /(javascript|vbscript|data)\s*:/i,                               // Protocolos XSS
+      /(\.\.[\/\\])/,                                                   // Path traversal
+      /([;|`]|\$\()/                                                    // Inyección de comandos
+    ];
+
+    /**
+     * Sanitiza y valida un campo de entrada.
+     * @param {string} valor     - Valor a validar
+     * @param {string} campo     - Nombre del campo ('usuario' | 'clave')
+     * @param {string} usuario   - Identificador para logging
+     * @returns {{ valido: boolean, valor: string, razon: string }}
+     */
+    function sanitizarEntrada(valor, campo, usuario) {
+      // Eliminar espacios al inicio y final (trim defensivo)
+      const valorLimpio = valor.trim();
+
+      // Verificar que no esté vacío después del trim
+      if (valorLimpio.length === 0) {
+        return { valido: false, valor: '', razon: 'Campo vacío tras sanitización' };
+      }
+
+      // Detección de patrones maliciosos — se evalúa ANTES del allowlist
+      // porque queremos registrar el tipo específico de ataque detectado
+      for (let i = 0; i < PATRONES_MALICIOSOS.length; i++) {
+        if (PATRONES_MALICIOSOS[i].test(valorLimpio)) {
+          registrarEvento('advertencia', usuario,
+            `Patrón sospechoso detectado en campo "${campo}" — ` +
+            `Regla #${i + 1} activada — Entrada bloqueada`);
+          return {
+            valido: false,
+            valor: '',
+            razon: 'Patrón de entrada sospechoso detectado'
+          };
+        }
+      }
+
+      // Validación por allowlist según el tipo de campo
+      const regex = campo === 'usuario' ? REGEX_USUARIO_VALIDO : REGEX_CLAVE_VALIDA;
+
+      if (!regex.test(valorLimpio)) {
+        registrarEvento('advertencia', usuario,
+          `Caracteres no permitidos en campo "${campo}" — ` +
+          `Solo se aceptan caracteres del allowlist`);
+        return {
+          valido: false,
+          valor: '',
+          razon: 'Caracteres no permitidos detectados'
+        };
+      }
+
+      return { valido: true, valor: valorLimpio, razon: '' };
+    }
+
+
+    /* ╔════════════════════════════════════════════════════════════╗
+       ║  CAPA 3 — POLÍTICA DE CLAVE                              ║
+       ║                                                           ║
+       ║  Requisitos mínimos de complejidad:                       ║
+       ║   • Mínimo 8 caracteres                                  ║
+       ║   • Al menos una letra mayúscula                          ║
+       ║   • Al menos una letra minúscula                          ║
+       ║   • Al menos un número                                    ║
+       ║                                                           ║
+       ║  Esta capa se evalúa DESPUÉS de la sanitización para      ║
+       ║  garantizar que la clave ya está limpia antes de          ║
+       ║  verificar su complejidad.                                ║
+       ╚════════════════════════════════════════════════════════════╝ */
+
+    /**
+     * Verifica que la contraseña cumpla la política de complejidad.
+     * @param {string} clave   - Contraseña ya sanitizada
+     * @param {string} usuario - Identificador para logging
+     * @returns {{ cumple: boolean, razon: string }}
+     */
+    function verificarPoliticaClave(clave, usuario) {
+      if (clave.length < 8) {
+        registrarEvento('advertencia', usuario,
+          'Política de clave: longitud insuficiente (mínimo 8 caracteres)');
+        return { cumple: false, razon: 'Longitud mínima no alcanzada' };
+      }
+
+      if (!/[A-Z]/.test(clave)) {
+        registrarEvento('advertencia', usuario,
+          'Política de clave: falta al menos una letra mayúscula');
+        return { cumple: false, razon: 'Requiere al menos una mayúscula' };
+      }
+
+      if (!/[a-z]/.test(clave)) {
+        registrarEvento('advertencia', usuario,
+          'Política de clave: falta al menos una letra minúscula');
+        return { cumple: false, razon: 'Requiere al menos una minúscula' };
+      }
+
+      if (!/[0-9]/.test(clave)) {
+        registrarEvento('advertencia', usuario,
+          'Política de clave: falta al menos un número');
+        return { cumple: false, razon: 'Requiere al menos un número' };
+      }
+
+      return { cumple: true, razon: '' };
+    }
+
+
+    /* ╔════════════════════════════════════════════════════════════╗
+       ║  AUTENTICACIÓN SIMULADA + MENSAJES OPACOS                ║
+       ║                                                           ║
+       ║  La verificación de credenciales se realiza comparando    ║
+       ║  ambos campos de forma conjunta. Nunca se revela cuál de  ║
+       ║  los dos campos es incorrecto — esto previene la          ║
+       ║  enumeración de usuarios (un atacante no puede descubrir  ║
+       ║  si un nombre de usuario existe o no).                    ║
+       ║                                                           ║
+       ║  Flujo de éxito:                                          ║
+       ║   • Reiniciar contador de intentos                        ║
+       ║   • Registrar evento info                                 ║
+       ║   • Mostrar mensaje de acceso concedido                   ║
+       ╚════════════════════════════════════════════════════════════╝ */
+
+    /**
+     * Simula la verificación de credenciales.
+     * @param {string} usuario - Usuario sanitizado
+     * @param {string} clave   - Clave sanitizada
+     * @returns {boolean}
+     */
+    function verificarCredenciales(usuario, clave) {
+      // Comparación conjunta — nunca revelar qué campo falló
+      return usuario === CREDENCIALES_DEMO.usuario &&
+             clave === CREDENCIALES_DEMO.clave;
+    }
+
+
+    /* ╔════════════════════════════════════════════════════════════╗
+       ║  FLUJO PRINCIPAL — LISTENER DEL FORMULARIO                ║
+       ║                                                           ║
+       ║  Orquesta las capas de defensa en orden:                  ║
+       ║   1. preventDefault() → control total del flujo           ║
+       ║   2. Verificar bloqueo (anti-fuerza bruta)                ║
+       ║   3. Sanitizar usuario (higiene de datos)                 ║
+       ║   4. Sanitizar contraseña (higiene de datos)              ║
+       ║   5. Verificar política de clave                          ║
+       ║   6. Verificar credenciales                               ║
+       ║   7. Manejar éxito o fallo                                ║
+       ╚════════════════════════════════════════════════════════════╝ */
+
+    formulario.addEventListener('submit', function(e) {
+      // preventDefault(): Impide el envío nativo del formulario.
+      // Esto es CRÍTICO: sin él, el navegador haría un GET/POST
+      // exponiendo datos en la URL o recargando la página,
+      // perdiendo el control del flujo de seguridad.
+      e.preventDefault();
+
+      // Ocultar mensajes anteriores
+      ocultarMensaje();
+
+      // Obtener valores crudos antes de cualquier procesamiento
+      const usuarioCrudo = campoUsuario.value;
+      const claveCruda = campoClave.value;
+
+      // Identificador para logging (si el usuario está vacío, usar "desconocido")
+      const idLog = usuarioCrudo.trim() || 'desconocido';
+
+      registrarEvento('info', idLog, 'Inicio de intento de autenticación');
+
+      // ── CAPA 1: Verificar bloqueo por fuerza bruta ──
+      if (verificarBloqueo()) {
+        return;
+      }
+
+      // ── Validación de campos requeridos ──
+      if (usuarioCrudo.trim() === '' || claveCruda.trim() === '') {
+        registrarEvento('advertencia', idLog,
+          'Campos obligatorios vacíos — Intento rechazado');
+        mostrarMensaje('Todos los campos son obligatorios.', 'error');
+        registrarFallo(idLog);
+        return;
+      }
+
+      // ── CAPA 2: Higiene de datos — Sanitizar usuario ──
+      const resultUsuario = sanitizarEntrada(usuarioCrudo, 'usuario', idLog);
+      if (!resultUsuario.valido) {
+        registrarEvento('advertencia', idLog,
+          `Sanitización de usuario fallida: ${resultUsuario.razon}`);
+        // Mensaje opaco — no revelar el motivo específico al usuario
+        mostrarMensaje('Credenciales inválidas.', 'error');
+        registrarFallo(idLog);
+        return;
+      }
+
+      // ── CAPA 2: Higiene de datos — Sanitizar contraseña ──
+      const resultClave = sanitizarEntrada(claveCruda, 'clave', idLog);
+      if (!resultClave.valido) {
+        registrarEvento('advertencia', idLog,
+          `Sanitización de clave fallida: ${resultClave.razon}`);
+        // Mensaje opaco — no revelar el motivo específico al usuario
+        mostrarMensaje('Credenciales inválidas.', 'error');
+        registrarFallo(idLog);
+        return;
+      }
+
+      // ── CAPA 3: Política de clave ──
+      const politica = verificarPoliticaClave(resultClave.valor, idLog);
+      if (!politica.cumple) {
+        registrarEvento('advertencia', idLog,
+          `Política de clave no cumplida: ${politica.razon}`);
+        // Mensaje opaco — no especificar qué requisito falta
+        mostrarMensaje('Credenciales inválidas.', 'error');
+        registrarFallo(idLog);
+        return;
+      }
+
+      // ── CAPA 4: Verificación de credenciales ──
+      if (verificarCredenciales(resultUsuario.valor, resultClave.valor)) {
+        // ÉXITO — Reiniciar estado y notificar
+        intentosFallidos = 0;
+        registrarEvento('info', resultUsuario.valor,
+          'Autenticación EXITOSA — Acceso concedido — ' +
+          'Contador de intentos reiniciado');
+        mostrarMensaje('Acceso concedido. Bienvenido al sistema.', 'success');
+
+        // Limpiar campos tras autenticación exitosa
+        formulario.reset();
+      } else {
+        // FALLO — Mensaje opaco + registrar intento
+        registrarEvento('advertencia', idLog,
+          'Credenciales no coinciden — Autenticación denegada');
+        mostrarMensaje('Credenciales inválidas.', 'error');
+        registrarFallo(idLog);
+      }
+    });
+
+    // ── Registro de inicio del módulo ──
+    registrarEvento('info', 'sistema',
+      'Módulo de autenticación inicializado — ' +
+      `Límite de intentos: ${MAX_INTENTOS} — ` +
+      'Estado: operativo');
+  </script>
+
+</body>
+</html>
