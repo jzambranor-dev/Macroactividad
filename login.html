@@ -4,27 +4,57 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!--
-    ╔══════════════════════════════════════════════════════════════════╗
-    ║  MÓDULO DE AUTENTICACIÓN FRONTEND — SEGURIDAD DEFENSIVA        ║
-    ║  Actividad: Construcción de módulo de autenticación frontend    ║
-    ║  Enfoque: Defense in Depth desde el lado del cliente            ║
-    ╚══════════════════════════════════════════════════════════════════╝
+    ╔══════════════════════════════════════════════════════════════════════╗
+    ║  MÓDULO DE AUTENTICACIÓN FRONTEND — SEGURIDAD DEFENSIVA v2.0       ║
+    ║  Actividad: Construcción de módulo de autenticación frontend        ║
+    ║  Enfoque: Defense in Depth desde el lado del cliente                ║
+    ╚══════════════════════════════════════════════════════════════════════╝
 
     Arquitectura de capas:
-      Capa 0 — HTML defensivo (atributos de seguridad)
-      Capa 1 — Anti-fuerza bruta (límite de intentos)
-      Capa 2 — Higiene de datos (sanitización + detección de patrones)
-      Capa 3 — Política de clave (complejidad mínima)
-      Capa 4 — Autenticación simulada con mensajes opacos
-      Transversal — Sistema de logging / trazabilidad tipo SIEM
+      Capa 0 — HTML defensivo (atributos de seguridad en markup)
+      Capa 1 — Anti-fuerza bruta (límite de intentos + cooldown temporal)
+      Capa 2 — CAPTCHA matemático (verificación humana)
+      Capa 3 — Higiene de datos (allowlist + detección de patrones)
+      Capa 4 — Política de clave (complejidad mínima obligatoria)
+      Capa 5 — Autenticación simulada con mensajes opacos
+      Transversal — SIEM visual + consola con trazabilidad completa
+
+    Decisiones de seguridad vs. el código de referencia:
+      ✓ Se usa <form> con e.preventDefault() — nunca onclick inline
+      ✓ AMBOS campos se sanitizan — nunca bypass de contraseña
+      ✓ Allowlist + patrones de ataque — no un simple .replace()
+      ✓ Mensajes opacos — nunca revelar conteo ni campo fallido
+      ✓ Credenciales demo claramente simuladas — no pseudo-reales
+      ✓ Fingerprint con datos reales del navegador — no IPs falsas
+      ✓ Entropía informativa — no confundir btoa con hashing
   -->
-  <title>Auth Module — Seguridad Defensiva</title>
+  <title>Auth Module — Centro de Comando SIEM</title>
 
   <!-- ═══════════════════════════════════════════════════════════════
-       ESTILOS — Estética "terminal / defensiva"
-       Fondo oscuro, tipografía monoespaciada, diseño limpio
+       ESTILOS — Layout de dos paneles: Auth (izquierda) + SIEM (derecha)
+       Estética terminal defensiva, tipografía monoespaciada, fondo oscuro
+       Sin dependencias externas — todo autocontenido
        ═══════════════════════════════════════════════════════════════ -->
   <style>
+    :root {
+      --bg-deep: #0a0e17;
+      --bg-panel: #0d1422;
+      --bg-card: #111927;
+      --border: #1e3a5f;
+      --border-bright: #2a5a8f;
+      --cyan: #4fd1c5;
+      --cyan-dim: #2a7a72;
+      --green: #48bb78;
+      --green-bright: #68d391;
+      --yellow: #ecc94b;
+      --orange: #ed8936;
+      --red: #eb5757;
+      --red-dim: #9b2c2c;
+      --text: #c8d6e5;
+      --text-dim: #5a6a7a;
+      --text-bright: #e2e8f0;
+    }
+
     *, *::before, *::after {
       box-sizing: border-box;
       margin: 0;
@@ -33,120 +63,262 @@
 
     body {
       font-family: 'Courier New', 'Lucida Console', monospace;
-      background-color: #0a0e17;
-      color: #c8d6e5;
+      background: var(--bg-deep);
+      color: var(--text);
       min-height: 100vh;
       display: flex;
-      justify-content: center;
+      overflow: hidden;
+    }
+
+    /* Efecto scanline sutil — estética terminal CRT */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ── PANEL IZQUIERDO: AUTENTICACIÓN ── */
+    .auth-panel {
+      width: 400px;
+      min-width: 400px;
+      background: linear-gradient(160deg, var(--bg-panel) 0%, var(--bg-deep) 100%);
+      border-right: 1px solid var(--border-bright);
+      display: flex;
+      flex-direction: column;
       align-items: center;
-      padding: 1rem;
+      padding: 28px 28px 20px;
+      overflow-y: auto;
+      position: relative;
+      z-index: 1;
     }
 
-    .auth-container {
-      background-color: #111927;
-      border: 1px solid #1e3a5f;
-      border-radius: 6px;
-      padding: 2.5rem 2rem;
-      width: 100%;
-      max-width: 420px;
-      box-shadow: 0 0 30px rgba(30, 58, 95, 0.3);
+    .auth-panel::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
     }
 
-    .auth-header {
+    /* Branding */
+    .brand {
       text-align: center;
-      margin-bottom: 2rem;
+      margin-bottom: 20px;
     }
 
-    .auth-header h1 {
-      font-size: 1.1rem;
-      color: #4fd1c5;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      margin-bottom: 0.4rem;
+    .brand-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 8px;
     }
 
-    .auth-header p {
-      font-size: 0.7rem;
-      color: #5a6a7a;
-      letter-spacing: 1px;
-    }
-
-    .separator {
-      border: none;
-      border-top: 1px solid #1e3a5f;
-      margin: 1.2rem 0;
-    }
-
-    .form-group {
-      margin-bottom: 1.2rem;
-    }
-
-    label {
-      display: block;
-      font-size: 0.75rem;
-      color: #4fd1c5;
-      margin-bottom: 0.4rem;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-    }
-
-    input[type="text"],
-    input[type="password"] {
+    .brand-icon svg {
       width: 100%;
-      padding: 0.7rem 0.8rem;
-      background-color: #0a0e17;
-      border: 1px solid #1e3a5f;
+      height: 100%;
+      filter: drop-shadow(0 0 10px rgba(79, 209, 197, 0.4));
+    }
+
+    .brand-name {
+      font-size: 16px;
+      font-weight: bold;
+      color: var(--cyan);
+      letter-spacing: 0.2em;
+      text-shadow: 0 0 16px rgba(79, 209, 197, 0.4);
+    }
+
+    .brand-sub {
+      font-size: 9px;
+      color: var(--text-dim);
+      letter-spacing: 0.12em;
+      margin-top: 3px;
+    }
+
+    /* Formulario */
+    .auth-card {
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border-bright);
       border-radius: 4px;
-      color: #c8d6e5;
+      padding: 22px;
+    }
+
+    .field-label {
+      font-size: 9px;
+      letter-spacing: 0.18em;
+      color: var(--text-dim);
+      margin-bottom: 5px;
+      text-transform: uppercase;
+      display: block;
+    }
+
+    .field-input {
+      width: 100%;
+      background: rgba(10, 14, 23, 0.9);
+      border: 1px solid var(--border);
+      color: var(--cyan);
       font-family: 'Courier New', monospace;
-      font-size: 0.9rem;
-      transition: border-color 0.2s ease;
-    }
-
-    input:focus {
+      font-size: 13px;
+      padding: 9px 11px;
       outline: none;
-      border-color: #4fd1c5;
-      box-shadow: 0 0 6px rgba(79, 209, 197, 0.15);
+      transition: border-color 0.2s, box-shadow 0.2s;
+      border-radius: 2px;
     }
 
-    input::placeholder {
-      color: #3a4a5a;
+    .field-input:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 10px rgba(79, 209, 197, 0.15);
     }
 
+    .field-input::placeholder { color: var(--text-dim); }
+
+    .field-input:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .form-group { margin-bottom: 12px; }
+
+    /* Barra de entropía */
+    .entropy-bar {
+      height: 3px;
+      background: var(--border);
+      margin-top: 4px;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .entropy-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 2px;
+      transition: width 0.3s, background 0.3s;
+    }
+
+    .entropy-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 8px;
+      color: var(--text-dim);
+      margin-top: 3px;
+      margin-bottom: 10px;
+    }
+
+    /* CAPTCHA */
+    .captcha-box {
+      background: rgba(10, 14, 23, 0.7);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+    }
+
+    .captcha-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .captcha-expr {
+      font-size: 15px;
+      font-weight: bold;
+      color: var(--yellow);
+      letter-spacing: 0.12em;
+      background: rgba(0, 10, 25, 0.9);
+      padding: 5px 12px;
+      border: 1px dashed var(--border);
+      text-align: center;
+      min-width: 110px;
+      user-select: none;
+    }
+
+    .captcha-refresh {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 13px;
+      cursor: pointer;
+      padding: 4px 7px;
+      transition: all 0.2s;
+      font-family: 'Courier New', monospace;
+    }
+
+    .captcha-refresh:hover {
+      color: var(--cyan);
+      border-color: var(--cyan);
+    }
+
+    .captcha-input {
+      width: 100%;
+      background: rgba(10, 14, 23, 0.9);
+      border: 1px solid var(--border);
+      color: var(--green);
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      padding: 7px 11px;
+      outline: none;
+      transition: border-color 0.2s;
+      border-radius: 2px;
+    }
+
+    .captcha-input:focus {
+      border-color: var(--green);
+      box-shadow: 0 0 6px rgba(72, 187, 120, 0.15);
+    }
+
+    .captcha-input::placeholder { color: var(--text-dim); }
+
+    .captcha-status {
+      font-size: 9px;
+      margin-top: 4px;
+      min-height: 13px;
+      letter-spacing: 0.08em;
+    }
+
+    .captcha-ok { color: var(--green); }
+    .captcha-err { color: var(--red); }
+
+    /* Botón de login */
     .btn-login {
       width: 100%;
-      padding: 0.75rem;
-      margin-top: 0.5rem;
-      background-color: #1e3a5f;
-      color: #4fd1c5;
-      border: 1px solid #4fd1c5;
-      border-radius: 4px;
+      padding: 11px;
+      background: linear-gradient(135deg, #1a3a5c, #1e4a6e);
+      border: 1px solid var(--cyan);
+      color: var(--cyan);
       font-family: 'Courier New', monospace;
-      font-size: 0.85rem;
-      letter-spacing: 2px;
+      font-size: 11px;
+      font-weight: bold;
+      letter-spacing: 0.2em;
       text-transform: uppercase;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.2s;
     }
 
     .btn-login:hover:not(:disabled) {
-      background-color: #4fd1c5;
-      color: #0a0e17;
+      background: linear-gradient(135deg, #1e4a6e, #2a5a8f);
+      box-shadow: 0 0 16px rgba(79, 209, 197, 0.25);
     }
 
     .btn-login:disabled {
-      opacity: 0.3;
+      background: var(--red-dim);
+      border-color: var(--red);
+      color: var(--red);
       cursor: not-allowed;
-      border-color: #5a6a7a;
-      color: #5a6a7a;
+      opacity: 0.7;
     }
 
-    /* Área de mensajes al usuario — opaca por diseño */
+    /* Mensajes */
     .msg-area {
-      margin-top: 1rem;
-      padding: 0.6rem 0.8rem;
-      border-radius: 4px;
-      font-size: 0.78rem;
+      margin-top: 10px;
+      padding: 8px 10px;
+      border-radius: 3px;
+      font-size: 10px;
       text-align: center;
       display: none;
       letter-spacing: 0.5px;
@@ -154,66 +326,461 @@
 
     .msg-area.error {
       display: block;
-      background-color: rgba(235, 87, 87, 0.12);
-      border: 1px solid #eb5757;
-      color: #eb5757;
+      background: rgba(235, 87, 87, 0.1);
+      border: 1px solid var(--red);
+      color: var(--red);
     }
 
     .msg-area.success {
       display: block;
-      background-color: rgba(79, 209, 197, 0.12);
-      border: 1px solid #4fd1c5;
-      color: #4fd1c5;
+      background: rgba(72, 187, 120, 0.1);
+      border: 1px solid var(--green);
+      color: var(--green);
     }
 
     .msg-area.blocked {
       display: block;
-      background-color: rgba(235, 87, 87, 0.2);
-      border: 1px solid #eb5757;
-      color: #eb5757;
+      background: rgba(235, 87, 87, 0.15);
+      border: 1px solid var(--red);
+      color: var(--red);
       font-weight: bold;
     }
 
-    .footer-info {
-      margin-top: 1.5rem;
+    /* Status badge */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 8px;
+      letter-spacing: 0.1em;
+      margin-top: 14px;
+      color: var(--text-dim);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--green); }
+      50% { opacity: 0.4; box-shadow: none; }
+    }
+
+    /* Panel de métricas locales */
+    .metrics-panel {
+      margin-top: 14px;
+      width: 100%;
+    }
+
+    .metrics-title {
+      font-size: 8px;
+      letter-spacing: 0.2em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 5px;
+      margin-bottom: 8px;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+    }
+
+    .metric-item {
+      background: rgba(10, 14, 23, 0.6);
+      border: 1px solid var(--border);
+      padding: 7px 9px;
+    }
+
+    .metric-item-label {
+      font-size: 7px;
+      letter-spacing: 0.12em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
+    .metric-item-value {
+      font-size: 17px;
+      font-weight: bold;
+    }
+
+    .mv-intentos { color: var(--yellow); }
+    .mv-captchas { color: var(--red); }
+    .mv-sesiones { color: var(--green); }
+    .mv-bloqueos { color: var(--orange); }
+
+    .metric-bar {
+      height: 2px;
+      margin-top: 3px;
+      background: var(--border);
+      overflow: hidden;
+    }
+
+    .metric-bar-fill {
+      height: 100%;
+      transition: width 0.4s;
+    }
+
+    /* ── PANEL DERECHO: SIEM VISUAL ── */
+    .siem-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      z-index: 1;
+      overflow: hidden;
+    }
+
+    .siem-header {
+      background: linear-gradient(180deg, rgba(13, 20, 34, 0.98), rgba(10, 14, 23, 0.95));
+      border-bottom: 1px solid var(--border-bright);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .siem-title {
       text-align: center;
-      font-size: 0.6rem;
-      color: #3a4a5a;
-      letter-spacing: 1px;
+      flex: 1;
+    }
+
+    .siem-title h1 {
+      font-size: 16px;
+      font-weight: bold;
+      color: var(--cyan);
+      letter-spacing: 0.25em;
+      text-shadow: 0 0 16px rgba(79, 209, 197, 0.3);
+    }
+
+    .siem-title p {
+      font-size: 8px;
+      color: var(--text-dim);
+      letter-spacing: 0.15em;
+      margin-top: 2px;
+    }
+
+    .header-clock {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-align: right;
+      min-width: 120px;
+    }
+
+    .header-sensor {
+      font-size: 9px;
+      color: var(--text-dim);
+      min-width: 120px;
+    }
+
+    .sensor-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--green);
+      font-size: 9px;
+    }
+
+    /* Barra de estadísticas */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border-bottom: 1px solid var(--border-bright);
+    }
+
+    .stat-card {
+      background: var(--bg-card);
+      padding: 12px 18px;
+      text-align: center;
+    }
+
+    .stat-label {
+      font-size: 7px;
+      letter-spacing: 0.18em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+
+    .stat-value {
+      font-size: 26px;
+      font-weight: bold;
+      margin-top: 3px;
+    }
+
+    .stat-total { color: var(--text-bright); }
+    .stat-critical { color: var(--red); text-shadow: 0 0 12px rgba(235, 87, 87, 0.4); }
+    .stat-block { color: var(--orange); text-shadow: 0 0 12px rgba(237, 137, 54, 0.4); }
+
+    /* Toolbar de filtros */
+    .siem-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 18px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(13, 20, 34, 0.8);
+    }
+
+    .btn-export {
+      padding: 6px 16px;
+      background: transparent;
+      border: 1px solid var(--cyan-dim);
+      color: var(--green);
+      font-family: 'Courier New', monospace;
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-export:hover {
+      background: rgba(72, 187, 120, 0.08);
+      border-color: var(--green);
+    }
+
+    .filter-badge {
+      font-size: 8px;
+      padding: 3px 9px;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.15s;
+      background: none;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 0.08em;
+    }
+
+    .filter-badge:hover,
+    .filter-badge.active {
+      border-color: var(--cyan-dim);
+      color: var(--cyan);
+    }
+
+    /* Feed de logs */
+    .log-feed {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 14px;
+    }
+
+    .log-feed::-webkit-scrollbar { width: 4px; }
+    .log-feed::-webkit-scrollbar-track { background: var(--bg-deep); }
+    .log-feed::-webkit-scrollbar-thumb { background: var(--border-bright); }
+
+    .log-entry {
+      background: var(--bg-card);
+      border-left: 3px solid #3182ce;
+      margin-bottom: 5px;
+      padding: 9px 12px;
+      font-size: 10px;
+      animation: slide-in 0.3s ease-out;
+    }
+
+    @keyframes slide-in {
+      from { transform: translateX(-8px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    .log-entry.level-info { border-left-color: #3182ce; }
+    .log-entry.level-advertencia { border-left-color: var(--yellow); background: rgba(40, 30, 0, 0.3); }
+    .log-entry.level-critico { border-left-color: var(--red); background: rgba(50, 0, 10, 0.4); }
+
+    .log-header {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 3px;
+    }
+
+    .log-badge {
+      font-size: 7px;
+      font-weight: bold;
+      padding: 1px 5px;
+      letter-spacing: 0.08em;
+    }
+
+    .badge-info { background: rgba(49, 130, 206, 0.3); color: #63b3ed; border: 1px solid rgba(49, 130, 206, 0.4); }
+    .badge-advertencia { background: rgba(150, 100, 0, 0.3); color: var(--yellow); border: 1px solid rgba(236, 201, 75, 0.3); }
+    .badge-critico { background: rgba(150, 0, 20, 0.4); color: var(--red); border: 1px solid rgba(235, 87, 87, 0.4); }
+
+    .log-time {
+      margin-left: auto;
+      font-size: 8px;
+      color: var(--text-dim);
+    }
+
+    .log-target {
+      font-size: 9px;
+      color: var(--cyan);
+      margin-bottom: 2px;
+    }
+
+    .log-target span { color: var(--text-dim); }
+
+    .log-detail {
+      font-size: 10px;
+      color: var(--text-bright);
+      margin-bottom: 2px;
+    }
+
+    .log-detail.text-critico { color: var(--red); }
+    .log-detail.text-advertencia { color: var(--yellow); }
+
+    .log-fingerprint {
+      font-size: 8px;
+      color: var(--text-dim);
+    }
+
+    .boot-notice {
+      background: rgba(0, 25, 50, 0.4);
+      border: 1px solid var(--border);
+      padding: 7px 12px;
+      font-size: 9px;
+      color: var(--text-dim);
+      margin: 6px 0;
+      letter-spacing: 0.04em;
+    }
+
+    /* Pantalla de acceso concedido */
+    .access-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: var(--bg-deep);
+      z-index: 10000;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      animation: fade-in 0.4s ease;
+    }
+
+    .access-overlay.show { display: flex; }
+
+    @keyframes fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .access-box {
+      border: 1px solid var(--green);
+      padding: 50px 70px;
+      text-align: center;
+      box-shadow: 0 0 50px rgba(72, 187, 120, 0.12);
+    }
+
+    .access-icon {
+      font-size: 42px;
+      margin-bottom: 14px;
+    }
+
+    .access-title {
+      font-size: 20px;
+      color: var(--green);
+      letter-spacing: 0.25em;
+      text-shadow: 0 0 16px rgba(72, 187, 120, 0.4);
+      margin-bottom: 8px;
+    }
+
+    .access-user {
+      font-size: 12px;
+      color: var(--cyan);
+      letter-spacing: 0.12em;
+    }
+
+    .access-btn {
+      margin-top: 28px;
+      padding: 9px 36px;
+      background: transparent;
+      border: 1px solid var(--green);
+      color: var(--green);
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .access-btn:hover {
+      background: rgba(72, 187, 120, 0.08);
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      body { flex-direction: column; overflow: auto; }
+      .auth-panel {
+        width: 100%;
+        min-width: unset;
+        border-right: none;
+        border-bottom: 1px solid var(--border-bright);
+      }
+      .siem-panel { min-height: 50vh; }
     }
   </style>
 </head>
 <body>
 
-  <!-- ═══════════════════════════════════════════════════════════════
-       CAPA 0 — HTML DEFENSIVO
-       Atributos de seguridad aplicados directamente en el markup:
-       • autocomplete="off" → evita que el navegador almacene y sugiera
-         credenciales en campos sensibles, reduciendo la superficie de
-         ataque si el dispositivo es compartido.
-       • spellcheck="false" → impide que el corrector envíe fragmentos
-         del campo a servicios externos de revisión ortográfica.
-       • type="password" → enmascara la entrada visualmente.
-       • required → validación nativa del navegador como primera barrera.
-       • maxlength → limita la longitud de la entrada como defensa contra
-         payloads excesivamente largos.
-       ═══════════════════════════════════════════════════════════════ -->
-  <main class="auth-container" role="main">
-    <header class="auth-header">
-      <h1>[ Auth Module ]</h1>
-      <p>Secure Frontend Authentication</p>
-    </header>
+<!-- ═══════════════════════════════════════════════════════════════════
+     PANTALLA DE ACCESO CONCEDIDO
+     Se muestra como overlay tras autenticación exitosa.
+     Aislada del flujo principal para no interferir con el formulario.
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="access-overlay" id="accessOverlay">
+  <div class="access-box">
+    <div class="access-icon">&#x2705;</div>
+    <div class="access-title">ACCESO CONCEDIDO</div>
+    <div class="access-user" id="accessUsuario"></div>
+    <button class="access-btn" id="btnCerrarAcceso">[ CERRAR SESION ]</button>
+  </div>
+</div>
 
-    <hr class="separator">
+<!-- ═══════════════════════════════════════════════════════════════════
+     PANEL IZQUIERDO — AUTENTICACIÓN
+     CAPA 0: HTML DEFENSIVO
+     Cada atributo de seguridad en el markup tiene propósito:
+       autocomplete="off"  → no almacenar credenciales en navegador
+       spellcheck="false"  → no enviar fragmentos a servicios de corrección
+       type="password"     → enmascarar visualmente
+       required            → barrera nativa del navegador
+       maxlength           → limitar superficie contra payloads grandes
+       novalidate en form  → control total desde JavaScript
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="auth-panel">
+  <div class="brand">
+    <div class="brand-icon">
+      <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M28 4L8 14V30C8 41.5 17 51.5 28 54C39 51.5 48 41.5 48 30V14L28 4Z"
+              stroke="#4fd1c5" stroke-width="1.5" fill="rgba(79,209,197,0.08)"/>
+        <path d="M28 12L14 20V30C14 38.5 20.5 46 28 48C35.5 46 42 38.5 42 30V20L28 12Z"
+              stroke="#4fd1c5" stroke-width="1" fill="rgba(79,209,197,0.05)"/>
+        <circle cx="28" cy="30" r="8" stroke="#4fd1c5" stroke-width="1" fill="rgba(79,209,197,0.1)"/>
+        <path d="M24 30L27 33L33 26" stroke="#48bb78" stroke-width="1.5"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="brand-name">[ AUTH MODULE ]</div>
+    <div class="brand-sub">Defense in Depth &middot; Frontend Security v2.0</div>
+  </div>
 
+  <div class="auth-card">
     <form id="formSeguro" novalidate>
+
       <div class="form-group">
-        <label for="campoUsuario">Usuario</label>
+        <label class="field-label" for="campoUsuario">Identificador de usuario</label>
         <input
+          class="field-input"
           type="text"
           id="campoUsuario"
           name="usuario"
-          placeholder="Ingrese su usuario"
+          placeholder="usuario"
           required
           maxlength="30"
           autocomplete="off"
@@ -223,473 +790,960 @@
       </div>
 
       <div class="form-group">
-        <label for="campoClave">Contraseña</label>
+        <label class="field-label" for="campoClave">Clave de acceso</label>
         <input
+          class="field-input"
           type="password"
           id="campoClave"
           name="clave"
-          placeholder="Ingrese su contraseña"
+          placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;"
           required
           maxlength="64"
           autocomplete="off"
           spellcheck="false"
           aria-label="Contraseña"
         >
+        <!-- Barra de entropía — informativa, no sustituye la política de clave -->
+        <div class="entropy-bar"><div class="entropy-fill" id="entropyFill"></div></div>
+        <div class="entropy-meta">
+          <span id="entropyLabel">Entropia: 0 bits</span>
+          <span id="entropyNivel">--</span>
+        </div>
+      </div>
+
+      <!-- CAPTCHA — Capa de verificación humana -->
+      <label class="field-label">Verificacion CAPTCHA</label>
+      <div class="captcha-box">
+        <div class="captcha-row">
+          <div class="captcha-expr" id="captchaExpr">? + ? = ?</div>
+          <button type="button" class="captcha-refresh" id="btnCaptchaRefresh"
+                  title="Nuevo desafio" aria-label="Generar nuevo CAPTCHA">&#8635;</button>
+        </div>
+        <input
+          class="captcha-input"
+          type="number"
+          id="captchaInput"
+          placeholder="Tu respuesta"
+          autocomplete="off"
+          aria-label="Respuesta al CAPTCHA"
+        >
+        <div class="captcha-status" id="captchaStatus"></div>
       </div>
 
       <button type="submit" id="btnLogin" class="btn-login">
-        [ Iniciar Sesión ]
+        &#9654; Verificar Identidad
       </button>
 
-      <!-- Área de mensajes — siempre opaca, nunca revela qué campo falló -->
       <div id="msgArea" class="msg-area" role="alert" aria-live="polite"></div>
     </form>
+  </div>
 
-    <div class="footer-info">
-      Defense in Depth &middot; Frontend Layer
+  <div class="status-badge">
+    <div class="status-dot"></div>
+    Modulo de defensa activo
+  </div>
+
+  <!-- Métricas locales de sesión -->
+  <div class="metrics-panel">
+    <div class="metrics-title">Metricas de sesion</div>
+    <div class="metrics-grid">
+      <div class="metric-item">
+        <div class="metric-item-label">Intentos</div>
+        <div class="metric-item-value mv-intentos" id="mlIntentos">0</div>
+        <div class="metric-bar"><div class="metric-bar-fill" id="mlIntentosBar"
+          style="width:0%;background:var(--yellow)"></div></div>
+      </div>
+      <div class="metric-item">
+        <div class="metric-item-label">CAPTCHA Fallidos</div>
+        <div class="metric-item-value mv-captchas" id="mlCaptchas">0</div>
+        <div class="metric-bar"><div class="metric-bar-fill" id="mlCaptchasBar"
+          style="width:0%;background:var(--red)"></div></div>
+      </div>
+      <div class="metric-item">
+        <div class="metric-item-label">Sesiones OK</div>
+        <div class="metric-item-value mv-sesiones" id="mlSesiones">0</div>
+        <div class="metric-bar"><div class="metric-bar-fill" id="mlSesionesBar"
+          style="width:0%;background:var(--green)"></div></div>
+      </div>
+      <div class="metric-item">
+        <div class="metric-item-label">Bloqueos</div>
+        <div class="metric-item-value mv-bloqueos" id="mlBloqueos">0</div>
+        <div class="metric-bar"><div class="metric-bar-fill" id="mlBloqueosBar"
+          style="width:0%;background:var(--orange)"></div></div>
+      </div>
     </div>
-  </main>
+  </div>
+</div>
 
-  <!-- ═══════════════════════════════════════════════════════════════
-       JAVASCRIPT — LÓGICA DEFENSIVA
-       Toda la lógica de autenticación, validación y trazabilidad
-       ═══════════════════════════════════════════════════════════════ -->
-  <script>
-    'use strict';
+<!-- ═══════════════════════════════════════════════════════════════════
+     PANEL DERECHO — CENTRO DE COMANDO SIEM VISUAL
+     Muestra en tiempo real cada evento de seguridad registrado
+     con severidad coloreada, timestamp, fingerprint y filtros.
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="siem-panel">
+  <div class="siem-header">
+    <div class="header-sensor">
+      <div class="sensor-live"><div class="status-dot"></div> SIEM en linea</div>
+      <div style="font-size:7px; color:var(--text-dim); margin-top:3px;">IDS/IPS Activo</div>
+    </div>
+    <div class="siem-title">
+      <h1>Centro de Comando SIEM</h1>
+      <p>Monitoreo de Eventos de Seguridad en Tiempo Real</p>
+    </div>
+    <div class="header-clock">
+      <div id="reloj">--:--:--</div>
+      <div style="font-size:8px; color:var(--text-dim); margin-top:2px;" id="fecha">---</div>
+    </div>
+  </div>
 
-    /* ╔════════════════════════════════════════════════════════════╗
-       ║  CONFIGURACIÓN Y CONSTANTES                              ║
-       ╚════════════════════════════════════════════════════════════╝ */
+  <!-- Contadores -->
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-label">Eventos Totales</div>
+      <div class="stat-value stat-total" id="statTotal">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Alertas Criticas</div>
+      <div class="stat-value stat-critical" id="statCritico">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Bloqueos Activos</div>
+      <div class="stat-value stat-block" id="statBloqueos">0</div>
+    </div>
+  </div>
 
-    // Máximo de intentos permitidos antes de bloqueo (anti-fuerza bruta)
-    const MAX_INTENTOS = 3;
+  <!-- Filtros y exportación -->
+  <div class="siem-toolbar">
+    <button class="btn-export" id="btnExport">&#11015; EXPORTAR CSV</button>
+    <button class="filter-badge active" data-filter="all">TODOS</button>
+    <button class="filter-badge" data-filter="critico">CRITICO</button>
+    <button class="filter-badge" data-filter="advertencia">ADVERTENCIA</button>
+    <button class="filter-badge" data-filter="info">INFO</button>
+  </div>
 
-    // Credenciales simuladas para demostración.
-    // En un entorno real NUNCA se almacenan credenciales en el frontend.
-    // Aquí se usan únicamente con fines académicos.
-    const CREDENCIALES_DEMO = {
-      usuario: 'admin_seguro',
-      clave: 'ClaveSegura1'
+  <!-- Feed de logs -->
+  <div class="log-feed" id="logFeed">
+    <div class="boot-notice">[SYS_BOOT] SIEM inicializado. Modulos de defensa en linea. Esperando eventos...</div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     JAVASCRIPT — LÓGICA DEFENSIVA COMPLETA
+     Toda la lógica en 'use strict', sin dependencias externas.
+     Cada capa se documenta con su propósito defensivo.
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+  'use strict';
+
+  /* ╔══════════════════════════════════════════════════════════════╗
+     ║  CONFIGURACIÓN Y CONSTANTES                                ║
+     ╚══════════════════════════════════════════════════════════════╝ */
+
+  // Anti-fuerza bruta: máximo de intentos antes de bloqueo
+  const MAX_INTENTOS = 3;
+
+  // Cooldown en milisegundos tras alcanzar el límite (30 segundos)
+  // Suficientemente largo para disuadir, con restauración automática
+  const COOLDOWN_MS = 30000;
+
+  // Credenciales simuladas para demostración.
+  // NOTA: En producción NUNCA se almacenan credenciales en el frontend.
+  // Estas son deliberadamente obvias para facilitar pruebas académicas.
+  const CREDENCIALES_DEMO = {
+    usuario: 'admin_seguro',
+    clave: 'ClaveSegura1'
+  };
+
+  /* ╔══════════════════════════════════════════════════════════════╗
+     ║  ESTADO MUTABLE DEL SISTEMA                                ║
+     ╚══════════════════════════════════════════════════════════════╝ */
+
+  let intentosFallidos = 0;
+  let sistemaBloqueado = false;
+  let cooldownTimer = null;
+
+  // Respuesta correcta del CAPTCHA actual
+  let captchaRespuesta = null;
+
+  // Almacén de logs para exportación CSV
+  const registroSIEM = [];
+
+  // Contadores para el dashboard
+  let contadorTotal = 0;
+  let contadorCritico = 0;
+  let contadorBloqueos = 0;
+
+  // Métricas locales de sesión
+  const metricas = {
+    intentos: 0,
+    captchasFallidos: 0,
+    sesiones: 0,
+    bloqueos: 0
+  };
+
+  // Filtro activo del SIEM
+  let filtroActivo = 'all';
+
+  /* ╔══════════════════════════════════════════════════════════════╗
+     ║  REFERENCIAS AL DOM                                        ║
+     ╚══════════════════════════════════════════════════════════════╝ */
+
+  const formulario = document.getElementById('formSeguro');
+  const campoUsuario = document.getElementById('campoUsuario');
+  const campoClave = document.getElementById('campoClave');
+  const btnLogin = document.getElementById('btnLogin');
+  const msgArea = document.getElementById('msgArea');
+  const logFeed = document.getElementById('logFeed');
+
+
+  /* ╔══════════════════════════════════════════════════════════════╗
+     ║  SISTEMA DE LOGGING / TRAZABILIDAD (Mini-SIEM)              ║
+     ║                                                              ║
+     ║  Doble salida: consola del navegador (F12) + panel visual.  ║
+     ║  Cada evento incluye:                                        ║
+     ║   • Timestamp ISO 8601                                       ║
+     ║   • Nivel: info / advertencia / critico                      ║
+     ║   • Usuario objetivo                                         ║
+     ║   • Detalle descriptivo                                      ║
+     ║   • Fingerprint REAL del navegador (no fabricado)             ║
+     ║                                                              ║
+     ║  A diferencia de generar IPs aleatorias (que es trazabilidad ║
+     ║  ficticia), aquí se capturan datos reales del User-Agent     ║
+     ║  que sí estarían disponibles en un frontend real.            ║
+     ╚══════════════════════════════════════════════════════════════╝ */
+
+  /**
+   * Genera un fingerprint con datos reales del navegador.
+   * Solo datos que el frontend puede obtener legítimamente.
+   */
+  function obtenerFingerprint() {
+    var idioma = navigator.language || 'desconocido';
+    var plataforma = navigator.platform || 'desconocido';
+    var resolucion = screen.width + 'x' + screen.height;
+    return 'Plataforma: ' + plataforma + ' | Idioma: ' + idioma + ' | Res: ' + resolucion;
+  }
+
+  /**
+   * Registra un evento de seguridad en consola Y en el panel SIEM visual.
+   * @param {string} nivel    - 'info' | 'advertencia' | 'critico'
+   * @param {string} usuario  - Identificador del usuario o 'sistema'
+   * @param {string} detalle  - Descripción del evento
+   */
+  function registrarEvento(nivel, usuario, detalle) {
+    var timestamp = new Date().toISOString();
+    var fingerprint = obtenerFingerprint();
+
+    // Almacenar para exportación CSV
+    var entrada = {
+      timestamp: timestamp,
+      nivel: nivel,
+      usuario: usuario,
+      detalle: detalle,
+      fingerprint: fingerprint
     };
+    registroSIEM.push(entrada);
 
-    // Contador de intentos fallidos consecutivos
-    let intentosFallidos = 0;
+    // Actualizar contadores del dashboard
+    contadorTotal++;
+    document.getElementById('statTotal').textContent = contadorTotal;
 
-    // Estado de bloqueo del sistema
-    let sistemaBloqueado = false;
+    if (nivel === 'critico') {
+      contadorCritico++;
+      document.getElementById('statCritico').textContent = contadorCritico;
+    }
 
-    // Referencias al DOM
-    const formulario = document.getElementById('formSeguro');
-    const campoUsuario = document.getElementById('campoUsuario');
-    const campoClave = document.getElementById('campoClave');
-    const btnLogin = document.getElementById('btnLogin');
-    const msgArea = document.getElementById('msgArea');
+    // Renderizar en el panel visual
+    renderizarEntradaLog(entrada);
+
+    // Salida a consola con formato estructurado y colores
+    var nivelUpper = nivel.toUpperCase();
+    while (nivelUpper.length < 12) nivelUpper += ' ';
+    var prefijo = '[AUTH-SIEM]';
+    var mensaje = prefijo + ' ' + timestamp + ' | ' + nivelUpper +
+                  ' | usuario: ' + usuario + ' | ' + detalle;
+
+    switch (nivel) {
+      case 'info':
+        console.log('%c' + mensaje, 'color: #4fd1c5');
+        break;
+      case 'advertencia':
+        console.warn('%c' + mensaje, 'color: #ecc94b');
+        break;
+      case 'critico':
+        console.error('%c' + mensaje, 'color: #eb5757; font-weight: bold');
+        break;
+      default:
+        console.log(mensaje);
+    }
+  }
+
+  /**
+   * Renderiza una entrada de log en el panel SIEM visual.
+   * Respeta el filtro activo.
+   */
+  function renderizarEntradaLog(entrada) {
+    var div = document.createElement('div');
+    div.className = 'log-entry level-' + entrada.nivel;
+    div.dataset.nivel = entrada.nivel;
+
+    // Ocultar si el filtro no coincide
+    if (filtroActivo !== 'all' && entrada.nivel !== filtroActivo) {
+      div.style.display = 'none';
+    }
+
+    var textClass = '';
+    if (entrada.nivel === 'critico') textClass = ' text-critico';
+    else if (entrada.nivel === 'advertencia') textClass = ' text-advertencia';
+
+    var timestampCorto = entrada.timestamp.replace('T', ' ').substring(0, 19);
+
+    div.innerHTML =
+      '<div class="log-header">' +
+        '<span class="log-badge badge-' + entrada.nivel + '">' +
+          entrada.nivel.toUpperCase() +
+        '</span>' +
+        '<span class="log-time">' + timestampCorto + '</span>' +
+      '</div>' +
+      '<div class="log-target"><span>Target: </span>' + entrada.usuario + '</div>' +
+      '<div class="log-detail' + textClass + '">' + escapeHTML(entrada.detalle) + '</div>' +
+      '<div class="log-fingerprint">' + entrada.fingerprint + '</div>';
+
+    logFeed.appendChild(div);
+    logFeed.scrollTop = logFeed.scrollHeight;
+  }
+
+  /**
+   * Escapa HTML para prevenir XSS al renderizar detalles en el panel.
+   * Esto es una medida defensiva: aunque los detalles los generamos
+   * nosotros, si un usuario inyecta HTML en el campo de usuario y ese
+   * valor se refleja en el log, podría ejecutar XSS. Con este escape,
+   * el contenido se renderiza como texto seguro.
+   */
+  function escapeHTML(str) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+  }
 
 
-    /* ╔════════════════════════════════════════════════════════════╗
-       ║  SISTEMA DE LOGGING / TRAZABILIDAD (Mini-SIEM)           ║
-       ║                                                           ║
-       ║  Cada evento se registra con:                             ║
-       ║   • timestamp ISO 8601                                    ║
-       ║   • nivel de severidad (info / advertencia / critico)     ║
-       ║   • usuario asociado (o "sistema")                        ║
-       ║   • detalle descriptivo                                   ║
-       ║                                                           ║
-       ║  Esto permite reconstruir la cadena de eventos en consola ║
-       ║  como haría un analista revisando logs de un SIEM.        ║
-       ╚════════════════════════════════════════════════════════════╝ */
+  /* ╔══════════════════════════════════════════════════════════════╗
+     ║  FUNCIONES DE INTERFAZ                                      ║
+     ╚══════════════════════════════════════════════════════════════╝ */
 
-    /**
-     * Registra un evento de seguridad en consola con formato estructurado.
-     * @param {string} nivel    - 'info' | 'advertencia' | 'critico'
-     * @param {string} usuario  - Identificador del usuario o 'sistema'
-     * @param {string} detalle  - Descripción del evento
-     */
-    function registrarEvento(nivel, usuario, detalle) {
-      const timestamp = new Date().toISOString();
-      const nivelUpper = nivel.toUpperCase().padEnd(12);
+  function mostrarMensaje(texto, tipo) {
+    msgArea.textContent = texto;
+    msgArea.className = 'msg-area ' + tipo;
+  }
 
-      const prefijo = '[AUTH-SIEM]';
-      const mensaje = `${prefijo} ${timestamp} | ${nivelUpper} | usuario: ${usuario} | ${detalle}`;
+  function ocultarMensaje() {
+    msgArea.textContent = '';
+    msgArea.className = 'msg-area';
+  }
 
-      switch (nivel) {
-        case 'info':
-          console.log('%c' + mensaje, 'color: #4fd1c5');
-          break;
-        case 'advertencia':
-          console.warn('%c' + mensaje, 'color: #f2c94c');
-          break;
-        case 'critico':
-          console.error('%c' + mensaje, 'color: #eb5757; font-weight: bold');
-          break;
-        default:
-          console.log(mensaje);
+  function actualizarMetricas() {
+    document.getElementById('mlIntentos').textContent = metricas.intentos;
+    document.getElementById('mlCaptchas').textContent = metricas.captchasFallidos;
+    document.getElementById('mlSesiones').textContent = metricas.sesiones;
+    document.getElementById('mlBloqueos').textContent = metricas.bloqueos;
+
+    document.getElementById('mlIntentosBar').style.width =
+      Math.min(100, (metricas.intentos / (MAX_INTENTOS * 3)) * 100) + '%';
+    document.getElementById('mlCaptchasBar').style.width =
+      Math.min(100, metricas.captchasFallidos * 20) + '%';
+    document.getElementById('mlSesionesBar').style.width =
+      Math.min(100, metricas.sesiones * 25) + '%';
+    document.getElementById('mlBloqueosBar').style.width =
+      Math.min(100, metricas.bloqueos * 33) + '%';
+  }
+
+
+  /* ╔══════════════════════════════════════════════════════════════╗
+     ║  CAPA 1 — ANTI-FUERZA BRUTA + COOLDOWN TEMPORAL            ║
+     ║                                                              ║
+     ║  Al alcanzar MAX_INTENTOS (3):                               ║
+     ║   • Se deshabilitan TODOS los campos + botón                 ║
+     ║   • Se registra evento CRÍTICO                               ║
+     ║   • Se inicia cooldown de 30 segundos                        ║
+     ║   • Tras el cooldown, se restaura automáticamente            ║
+     ║                                                              ║
+     ║  ¿Por qué cooldown y no bloqueo permanente?                  ║
+     ║  En un frontend sin backend, el bloqueo permanente se        ║
+     ║  resetea recargando la página. El cooldown con cuenta        ║
+     ║  regresiva visible es más honesto pedagógicamente y simula   ║
+     ║  mejor el comportamiento real de rate-limiting. Un atacante  ║
+     ║  que recargue pierde su progreso igualmente.                 ║
+     ║                                                              ║
+     ║  Se evalúa PRIMERA porque si el sistema ya está bloqueado,   ║
+     ║  no tiene sentido gastar recursos en sanitizar o validar.    ║
+     ╚══════════════════════════════════════════════════════════════╝ */
+
+  function verificarBloqueo() {
+    if (sistemaBloqueado) {
+      registrarEvento('critico', 'sistema',
+        'Intento de acceso en estado bloqueado — Accion denegada');
+      return true;
+    }
+    return false;
+  }
+
+  function bloquearInterfaz(usuario) {
+    sistemaBloqueado = true;
+
+    btnLogin.disabled = true;
+    campoUsuario.disabled = true;
+    campoClave.disabled = true;
+
+    metricas.bloqueos++;
+    contadorBloqueos++;
+    document.getElementById('statBloqueos').textContent = contadorBloqueos;
+    actualizarMetricas();
+
+    registrarEvento('critico', usuario,
+      'Limite de ' + MAX_INTENTOS + ' intentos alcanzado — BLOQUEO ACTIVADO — ' +
+      'Cooldown de ' + (COOLDOWN_MS / 1000) + 's iniciado — Posible fuerza bruta');
+
+    var segundosRestantes = COOLDOWN_MS / 1000;
+    mostrarMensaje(
+      'Acceso bloqueado — Cooldown: ' + segundosRestantes + 's',
+      'blocked'
+    );
+
+    // Cuenta regresiva visual
+    cooldownTimer = setInterval(function() {
+      segundosRestantes--;
+      if (segundosRestantes <= 0) {
+        clearInterval(cooldownTimer);
+        restaurarInterfaz();
+      } else {
+        mostrarMensaje(
+          'Acceso bloqueado — Cooldown: ' + segundosRestantes + 's',
+          'blocked'
+        );
       }
+    }, 1000);
+  }
+
+  function restaurarInterfaz() {
+    sistemaBloqueado = false;
+    intentosFallidos = 0;
+
+    btnLogin.disabled = false;
+    campoUsuario.disabled = false;
+    campoClave.disabled = false;
+
+    ocultarMensaje();
+    generarCaptcha();
+
+    registrarEvento('info', 'sistema',
+      'Cooldown finalizado — Interfaz restaurada — Contador reiniciado');
+  }
+
+  function registrarFallo(usuario) {
+    intentosFallidos++;
+    var restantes = MAX_INTENTOS - intentosFallidos;
+
+    registrarEvento('advertencia', usuario,
+      'Intento fallido #' + intentosFallidos + ' de ' + MAX_INTENTOS +
+      ' — Quedan ' + restantes + ' intento(s)');
+
+    if (intentosFallidos >= MAX_INTENTOS) {
+      bloquearInterfaz(usuario);
+    }
+  }
+
+
+  /* ╔══════════════════════════════════════════════════════════════╗
+     ║  CAPA 2 — CAPTCHA MATEMÁTICO                                ║
+     ║                                                              ║
+     ║  Operaciones aleatorias (suma, resta, multiplicación) que    ║
+     ║  un humano resuelve fácilmente pero dificultan scripts       ║
+     ║  automatizados de fuerza bruta.                              ║
+     ║                                                              ║
+     ║  Se regenera tras cada intento (exitoso o fallido) para      ║
+     ║  que no pueda reutilizarse la respuesta anterior.            ║
+     ║                                                              ║
+     ║  Se evalúa ANTES de la sanitización: si el CAPTCHA falla,   ║
+     ║  el intento se descarta sin siquiera procesar los campos.    ║
+     ║  Esto reduce la superficie que un bot puede explorar.        ║
+     ╚══════════════════════════════════════════════════════════════╝ */
+
+  function generarCaptcha() {
+    var operadores = ['+', '-', '\u00D7'];
+    var op = operadores[Math.floor(Math.random() * operadores.length)];
+    var a, b, resultado;
+
+    if (op === '+') {
+      a = aleatorio(2, 15);
+      b = aleatorio(2, 15);
+      resultado = a + b;
+    } else if (op === '-') {
+      a = aleatorio(5, 20);
+      b = aleatorio(1, a);
+      resultado = a - b;
+    } else {
+      a = aleatorio(2, 9);
+      b = aleatorio(2, 9);
+      resultado = a * b;
     }
 
+    captchaRespuesta = resultado;
+    document.getElementById('captchaExpr').textContent = a + ' ' + op + ' ' + b + ' = ?';
+    document.getElementById('captchaInput').value = '';
+    document.getElementById('captchaStatus').textContent = '';
+    document.getElementById('captchaStatus').className = 'captcha-status';
+  }
 
-    /* ╔════════════════════════════════════════════════════════════╗
-       ║  FUNCIONES DE INTERFAZ                                    ║
-       ╚════════════════════════════════════════════════════════════╝ */
+  function aleatorio(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
 
-    /**
-     * Muestra un mensaje al usuario en la interfaz.
-     * Los mensajes son siempre OPACOS: nunca revelan qué campo falló.
-     * @param {string} texto  - Mensaje a mostrar
-     * @param {string} tipo   - 'error' | 'success' | 'blocked'
-     */
-    function mostrarMensaje(texto, tipo) {
-      msgArea.textContent = texto;
-      msgArea.className = 'msg-area ' + tipo;
+  function verificarCaptcha() {
+    var valor = parseInt(document.getElementById('captchaInput').value, 10);
+    return valor === captchaRespuesta;
+  }
+
+  // Feedback en tiempo real del CAPTCHA
+  document.getElementById('captchaInput').addEventListener('input', function() {
+    var valor = this.value;
+    var statusEl = document.getElementById('captchaStatus');
+
+    if (valor === '') {
+      statusEl.textContent = '';
+      statusEl.className = 'captcha-status';
+      return;
     }
 
-    /** Oculta el mensaje de la interfaz */
-    function ocultarMensaje() {
-      msgArea.textContent = '';
-      msgArea.className = 'msg-area';
+    if (parseInt(valor, 10) === captchaRespuesta) {
+      statusEl.textContent = '\u2714 Correcto';
+      statusEl.className = 'captcha-status captcha-ok';
+    } else {
+      statusEl.textContent = '\u2718 Incorrecto';
+      statusEl.className = 'captcha-status captcha-err';
+    }
+  });
+
+  // Botón de refresh del CAPTCHA
+  document.getElementById('btnCaptchaRefresh').addEventListener('click', function() {
+    generarCaptcha();
+  });
+
+
+  /* ╔══════════════════════════════════════════════════════════════╗
+     ║  ENTROPÍA DE CONTRASEÑA — Indicador visual informativo      ║
+     ║                                                              ║
+     ║  Calcula la entropía teórica basada en el tamaño del         ║
+     ║  charset detectado. Esto NO sustituye la política de clave   ║
+     ║  (Capa 4): una contraseña con alta entropía pero sin        ║
+     ║  mayúsculas seguiría siendo rechazada por la política.       ║
+     ║                                                              ║
+     ║  Fórmula: E = L * log2(C)                                   ║
+     ║   L = longitud, C = tamaño del charset detectado             ║
+     ║                                                              ║
+     ║  A diferencia de usar btoa() como "hash" (que es base64,    ║
+     ║  una codificación reversible, NO un hash criptográfico),    ║
+     ║  aquí se muestra la entropía real en bits, que es la métrica ║
+     ║  estándar para evaluar fortaleza de contraseñas.            ║
+     ╚══════════════════════════════════════════════════════════════╝ */
+
+  function calcularEntropia(pwd) {
+    if (pwd.length === 0) return 0;
+    var charsetSize = 0;
+    if (/[a-z]/.test(pwd)) charsetSize += 26;
+    if (/[A-Z]/.test(pwd)) charsetSize += 26;
+    if (/[0-9]/.test(pwd)) charsetSize += 10;
+    if (/[^a-zA-Z0-9]/.test(pwd)) charsetSize += 32;
+    if (charsetSize === 0) return 0;
+    return Math.floor(pwd.length * Math.log2(charsetSize));
+  }
+
+  campoClave.addEventListener('input', function() {
+    var pwd = this.value;
+    var bits = calcularEntropia(pwd);
+    var fill = document.getElementById('entropyFill');
+    var label = document.getElementById('entropyLabel');
+    var nivel = document.getElementById('entropyNivel');
+
+    label.textContent = 'Entropia: ' + bits + ' bits';
+
+    var pct = Math.min(100, (bits / 80) * 100);
+    fill.style.width = pct + '%';
+
+    if (bits < 28) {
+      fill.style.background = 'var(--red)';
+      nivel.textContent = 'Debil';
+      nivel.style.color = 'var(--red)';
+    } else if (bits < 50) {
+      fill.style.background = 'var(--yellow)';
+      nivel.textContent = 'Moderada';
+      nivel.style.color = 'var(--yellow)';
+    } else {
+      fill.style.background = 'var(--green)';
+      nivel.textContent = 'Fuerte';
+      nivel.style.color = 'var(--green)';
     }
 
-    /** Bloquea la interfaz tras alcanzar el límite de intentos */
-    function bloquearInterfaz() {
-      sistemaBloqueado = true;
-      btnLogin.disabled = true;
-      campoUsuario.disabled = true;
-      campoClave.disabled = true;
-      mostrarMensaje(
-        'Acceso bloqueado — Demasiados intentos fallidos. Contacte al administrador.',
-        'blocked'
-      );
+    if (pwd.length === 0) {
+      fill.style.width = '0%';
+      nivel.textContent = '--';
+      nivel.style.color = 'var(--text-dim)';
+    }
+  });
+
+
+  /* ╔══════════════════════════════════════════════════════════════╗
+     ║  CAPA 3 — HIGIENE DE DATOS (Sanitización)                   ║
+     ║                                                              ║
+     ║  Estrategia: ALLOWLIST (lista blanca)                        ║
+     ║  Solo se permiten caracteres explícitamente autorizados.     ║
+     ║  Es más seguro que blocklist porque:                         ║
+     ║   • Una blocklist puede omitir variantes (encoding, Unicode) ║
+     ║   • Con allowlist, todo lo no permitido se rechaza           ║
+     ║                                                              ║
+     ║  AMBOS campos se sanitizan — usuario Y contraseña.           ║
+     ║  (A diferencia del código de referencia que solo sanitiza    ║
+     ║  el usuario y pasa la contraseña cruda, creando un bypass)  ║
+     ║                                                              ║
+     ║  Antes del allowlist se ejecuta detección de patrones de     ║
+     ║  ataque conocidos para registro específico en el SIEM.       ║
+     ╚══════════════════════════════════════════════════════════════╝ */
+
+  var REGEX_USUARIO_VALIDO = /^[a-zA-Z0-9_\-\.]+$/;
+  var REGEX_CLAVE_VALIDA = /^[a-zA-Z0-9!@#$%^&*()_\-+=.,?]+$/;
+
+  var PATRONES_MALICIOSOS = [
+    { regex: /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|ALTER|CREATE)\b)/i, tipo: 'SQL Keyword' },
+    { regex: /(-{2}|\/\*|\*\/)/, tipo: 'SQL Comment' },
+    { regex: /((\bOR\b|\bAND\b)\s*[\d'"]?\s*=\s*[\d'"]\s*)/i, tipo: 'SQL Tautology' },
+    { regex: /(<\s*script|<\s*img|<\s*svg|<\s*iframe)/i, tipo: 'XSS Tag' },
+    { regex: /(onerror|onload|onclick|onmouseover)\s*=/i, tipo: 'XSS Event' },
+    { regex: /(javascript|vbscript|data)\s*:/i, tipo: 'XSS Protocol' },
+    { regex: /(\.\.[\/\\])/, tipo: 'Path Traversal' },
+    { regex: /([;|`]|\$\()/, tipo: 'Command Injection' }
+  ];
+
+  function sanitizarEntrada(valor, campo, usuario) {
+    var valorLimpio = valor.trim();
+
+    if (valorLimpio.length === 0) {
+      return { valido: false, valor: '', razon: 'Campo vacio tras sanitizacion' };
     }
 
-
-    /* ╔════════════════════════════════════════════════════════════╗
-       ║  CAPA 1 — ANTI-FUERZA BRUTA                              ║
-       ║                                                           ║
-       ║  Limita los intentos fallidos consecutivos a MAX_INTENTOS ║
-       ║  (3 por defecto). Al alcanzar el límite:                  ║
-       ║   • Se deshabilita toda la interfaz                       ║
-       ║   • Se registra un evento CRÍTICO                         ║
-       ║   • El sistema queda en estado fail-safe (bloqueado)      ║
-       ║                                                           ║
-       ║  ¿Por qué esta capa va primero? Porque debe evaluarse     ║
-       ║  ANTES de cualquier procesamiento de datos. Si el usuario ║
-       ║  ya agotó sus intentos, no tiene sentido gastar recursos  ║
-       ║  en sanitizar o validar — se bloquea de inmediato.        ║
-       ╚════════════════════════════════════════════════════════════╝ */
-
-    /**
-     * Verifica si el sistema está bloqueado por exceso de intentos.
-     * @returns {boolean} true si está bloqueado
-     */
-    function verificarBloqueo() {
-      if (sistemaBloqueado) {
-        registrarEvento('critico', 'sistema',
-          'Intento de acceso en estado bloqueado — Acción denegada');
-        return true;
-      }
-      return false;
-    }
-
-    /**
-     * Incrementa el contador de fallos y bloquea si se alcanza el límite.
-     * @param {string} usuario - Usuario que falló
-     */
-    function registrarFallo(usuario) {
-      intentosFallidos++;
-      const restantes = MAX_INTENTOS - intentosFallidos;
-
-      registrarEvento('advertencia', usuario,
-        `Intento fallido #${intentosFallidos} de ${MAX_INTENTOS} — ` +
-        `Quedan ${restantes} intento(s)`);
-
-      if (intentosFallidos >= MAX_INTENTOS) {
-        registrarEvento('critico', usuario,
-          'Límite de intentos alcanzado — BLOQUEO ACTIVADO — ' +
-          'Posible ataque de fuerza bruta');
-        bloquearInterfaz();
-      }
-    }
-
-
-    /* ╔════════════════════════════════════════════════════════════╗
-       ║  CAPA 2 — HIGIENE DE DATOS (Sanitización)                ║
-       ║                                                           ║
-       ║  Filtra y valida las entradas ANTES de usarlas.           ║
-       ║                                                           ║
-       ║  ¿Por qué sanitizar en el frontend?                       ║
-       ║  Aunque la validación definitiva ocurre en el backend,    ║
-       ║  sanitizar aquí cumple dos funciones:                     ║
-       ║   1. Reducir ruido: evitar que payloads maliciosos        ║
-       ║      lleguen siquiera al servidor.                        ║
-       ║   2. Detección temprana: identificar y registrar          ║
-       ║      comportamientos sospechosos para trazabilidad.       ║
-       ║                                                           ║
-       ║  Estrategia: LISTA BLANCA (allowlist)                     ║
-       ║  Solo se permiten caracteres explícitamente autorizados.  ║
-       ║  Esto es más seguro que una lista negra (blocklist),      ║
-       ║  porque una blocklist puede omitir variantes de ataque    ║
-       ║  (encoding alternativo, caracteres Unicode confusos,      ║
-       ║  etc.). Con allowlist, todo lo que NO esté permitido se   ║
-       ║  rechaza automáticamente.                                 ║
-       ║                                                           ║
-       ║  Patrones detectados:                                     ║
-       ║   • Inyección SQL: OR, UNION, SELECT, DROP, --, etc.     ║
-       ║   • XSS: <script>, onerror, javascript:, etc.            ║
-       ║   • Traversal de directorios: ../, ..\                    ║
-       ║   • Inyección de comandos: ;, |, $(), backticks           ║
-       ╚════════════════════════════════════════════════════════════╝ */
-
-    // Caracteres permitidos: alfanuméricos, guion, guion bajo, punto
-    // Esto cubre nombres de usuario razonables sin abrir superficie de ataque
-    const REGEX_USUARIO_VALIDO = /^[a-zA-Z0-9_\-\.]+$/;
-
-    // Caracteres permitidos en contraseña: alfanuméricos y caracteres especiales
-    // comunes en políticas de clave, sin incluir caracteres de control o markup
-    const REGEX_CLAVE_VALIDA = /^[a-zA-Z0-9!@#$%^&*()_\-+=.,?]+$/;
-
-    // Patrones de ataque conocidos (case-insensitive)
-    const PATRONES_MALICIOSOS = [
-      /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|ALTER|CREATE)\b)/i,  // SQL
-      /(-{2}|\/\*|\*\/)/,                                              // Comentarios SQL
-      /((\bOR\b|\bAND\b)\s*[\d'"]?\s*=\s*[\d'"]\s*)/i,               // Tautologías SQL
-      /(<\s*script|<\s*img|<\s*svg|<\s*iframe)/i,                     // HTML/XSS tags
-      /(onerror|onload|onclick|onmouseover)\s*=/i,                     // Eventos XSS
-      /(javascript|vbscript|data)\s*:/i,                               // Protocolos XSS
-      /(\.\.[\/\\])/,                                                   // Path traversal
-      /([;|`]|\$\()/                                                    // Inyección de comandos
-    ];
-
-    /**
-     * Sanitiza y valida un campo de entrada.
-     * @param {string} valor     - Valor a validar
-     * @param {string} campo     - Nombre del campo ('usuario' | 'clave')
-     * @param {string} usuario   - Identificador para logging
-     * @returns {{ valido: boolean, valor: string, razon: string }}
-     */
-    function sanitizarEntrada(valor, campo, usuario) {
-      // Eliminar espacios al inicio y final (trim defensivo)
-      const valorLimpio = valor.trim();
-
-      // Verificar que no esté vacío después del trim
-      if (valorLimpio.length === 0) {
-        return { valido: false, valor: '', razon: 'Campo vacío tras sanitización' };
-      }
-
-      // Detección de patrones maliciosos — se evalúa ANTES del allowlist
-      // porque queremos registrar el tipo específico de ataque detectado
-      for (let i = 0; i < PATRONES_MALICIOSOS.length; i++) {
-        if (PATRONES_MALICIOSOS[i].test(valorLimpio)) {
-          registrarEvento('advertencia', usuario,
-            `Patrón sospechoso detectado en campo "${campo}" — ` +
-            `Regla #${i + 1} activada — Entrada bloqueada`);
-          return {
-            valido: false,
-            valor: '',
-            razon: 'Patrón de entrada sospechoso detectado'
-          };
-        }
-      }
-
-      // Validación por allowlist según el tipo de campo
-      const regex = campo === 'usuario' ? REGEX_USUARIO_VALIDO : REGEX_CLAVE_VALIDA;
-
-      if (!regex.test(valorLimpio)) {
+    // Detección de patrones antes del allowlist para logging específico
+    for (var i = 0; i < PATRONES_MALICIOSOS.length; i++) {
+      if (PATRONES_MALICIOSOS[i].regex.test(valorLimpio)) {
         registrarEvento('advertencia', usuario,
-          `Caracteres no permitidos en campo "${campo}" — ` +
-          `Solo se aceptan caracteres del allowlist`);
+          'Patron sospechoso en campo "' + campo + '" — ' +
+          'Tipo: ' + PATRONES_MALICIOSOS[i].tipo + ' (Regla #' + (i + 1) + ') — Entrada bloqueada');
         return {
           valido: false,
           valor: '',
-          razon: 'Caracteres no permitidos detectados'
+          razon: 'Patron de ataque detectado: ' + PATRONES_MALICIOSOS[i].tipo
         };
       }
-
-      return { valido: true, valor: valorLimpio, razon: '' };
     }
 
+    // Allowlist por tipo de campo
+    var regex = campo === 'usuario' ? REGEX_USUARIO_VALIDO : REGEX_CLAVE_VALIDA;
 
-    /* ╔════════════════════════════════════════════════════════════╗
-       ║  CAPA 3 — POLÍTICA DE CLAVE                              ║
-       ║                                                           ║
-       ║  Requisitos mínimos de complejidad:                       ║
-       ║   • Mínimo 8 caracteres                                  ║
-       ║   • Al menos una letra mayúscula                          ║
-       ║   • Al menos una letra minúscula                          ║
-       ║   • Al menos un número                                    ║
-       ║                                                           ║
-       ║  Esta capa se evalúa DESPUÉS de la sanitización para      ║
-       ║  garantizar que la clave ya está limpia antes de          ║
-       ║  verificar su complejidad.                                ║
-       ╚════════════════════════════════════════════════════════════╝ */
-
-    /**
-     * Verifica que la contraseña cumpla la política de complejidad.
-     * @param {string} clave   - Contraseña ya sanitizada
-     * @param {string} usuario - Identificador para logging
-     * @returns {{ cumple: boolean, razon: string }}
-     */
-    function verificarPoliticaClave(clave, usuario) {
-      if (clave.length < 8) {
-        registrarEvento('advertencia', usuario,
-          'Política de clave: longitud insuficiente (mínimo 8 caracteres)');
-        return { cumple: false, razon: 'Longitud mínima no alcanzada' };
-      }
-
-      if (!/[A-Z]/.test(clave)) {
-        registrarEvento('advertencia', usuario,
-          'Política de clave: falta al menos una letra mayúscula');
-        return { cumple: false, razon: 'Requiere al menos una mayúscula' };
-      }
-
-      if (!/[a-z]/.test(clave)) {
-        registrarEvento('advertencia', usuario,
-          'Política de clave: falta al menos una letra minúscula');
-        return { cumple: false, razon: 'Requiere al menos una minúscula' };
-      }
-
-      if (!/[0-9]/.test(clave)) {
-        registrarEvento('advertencia', usuario,
-          'Política de clave: falta al menos un número');
-        return { cumple: false, razon: 'Requiere al menos un número' };
-      }
-
-      return { cumple: true, razon: '' };
+    if (!regex.test(valorLimpio)) {
+      registrarEvento('advertencia', usuario,
+        'Caracteres no permitidos en campo "' + campo + '" — ' +
+        'Solo se aceptan caracteres del allowlist');
+      return {
+        valido: false,
+        valor: '',
+        razon: 'Caracteres fuera del allowlist'
+      };
     }
 
+    return { valido: true, valor: valorLimpio, razon: '' };
+  }
 
-    /* ╔════════════════════════════════════════════════════════════╗
-       ║  AUTENTICACIÓN SIMULADA + MENSAJES OPACOS                ║
-       ║                                                           ║
-       ║  La verificación de credenciales se realiza comparando    ║
-       ║  ambos campos de forma conjunta. Nunca se revela cuál de  ║
-       ║  los dos campos es incorrecto — esto previene la          ║
-       ║  enumeración de usuarios (un atacante no puede descubrir  ║
-       ║  si un nombre de usuario existe o no).                    ║
-       ║                                                           ║
-       ║  Flujo de éxito:                                          ║
-       ║   • Reiniciar contador de intentos                        ║
-       ║   • Registrar evento info                                 ║
-       ║   • Mostrar mensaje de acceso concedido                   ║
-       ╚════════════════════════════════════════════════════════════╝ */
 
-    /**
-     * Simula la verificación de credenciales.
-     * @param {string} usuario - Usuario sanitizado
-     * @param {string} clave   - Clave sanitizada
-     * @returns {boolean}
-     */
-    function verificarCredenciales(usuario, clave) {
-      // Comparación conjunta — nunca revelar qué campo falló
-      return usuario === CREDENCIALES_DEMO.usuario &&
-             clave === CREDENCIALES_DEMO.clave;
+  /* ╔══════════════════════════════════════════════════════════════╗
+     ║  CAPA 4 — POLÍTICA DE CLAVE (Complejidad mínima)            ║
+     ║                                                              ║
+     ║  Requisitos estrictos verificados DESPUÉS de sanitización:   ║
+     ║   • Mínimo 8 caracteres                                     ║
+     ║   • Al menos una mayúscula [A-Z]                             ║
+     ║   • Al menos una minúscula [a-z]                             ║
+     ║   • Al menos un dígito [0-9]                                 ║
+     ║                                                              ║
+     ║  Esto es más robusto que solo verificar entropía > N bits,   ║
+     ║  porque "aaaaaaaaaa" tiene entropía baja pero cumpliría un   ║
+     ║  check de longitud, mientras que aquí se exige diversidad    ║
+     ║  de tipos de caracteres.                                     ║
+     ╚══════════════════════════════════════════════════════════════╝ */
+
+  function verificarPoliticaClave(clave, usuario) {
+    if (clave.length < 8) {
+      registrarEvento('advertencia', usuario,
+        'Politica de clave: longitud insuficiente (minimo 8 caracteres)');
+      return { cumple: false, razon: 'Longitud minima no alcanzada' };
+    }
+    if (!/[A-Z]/.test(clave)) {
+      registrarEvento('advertencia', usuario,
+        'Politica de clave: falta al menos una letra mayuscula');
+      return { cumple: false, razon: 'Requiere al menos una mayuscula' };
+    }
+    if (!/[a-z]/.test(clave)) {
+      registrarEvento('advertencia', usuario,
+        'Politica de clave: falta al menos una letra minuscula');
+      return { cumple: false, razon: 'Requiere al menos una minuscula' };
+    }
+    if (!/[0-9]/.test(clave)) {
+      registrarEvento('advertencia', usuario,
+        'Politica de clave: falta al menos un numero');
+      return { cumple: false, razon: 'Requiere al menos un numero' };
+    }
+    return { cumple: true, razon: '' };
+  }
+
+
+  /* ╔══════════════════════════════════════════════════════════════╗
+     ║  CAPA 5 — AUTENTICACIÓN SIMULADA + MENSAJES OPACOS          ║
+     ║                                                              ║
+     ║  Comparación conjunta: nunca se revela si falló el usuario   ║
+     ║  o la contraseña. Mensaje único: "Credenciales invalidas."   ║
+     ║  Esto previene enumeración de usuarios.                      ║
+     ║                                                              ║
+     ║  En éxito: reiniciar contador, limpiar campos, mostrar       ║
+     ║  pantalla de acceso, regenerar CAPTCHA.                      ║
+     ╚══════════════════════════════════════════════════════════════╝ */
+
+  function verificarCredenciales(usuario, clave) {
+    return usuario === CREDENCIALES_DEMO.usuario &&
+           clave === CREDENCIALES_DEMO.clave;
+  }
+
+
+  /* ╔══════════════════════════════════════════════════════════════╗
+     ║  FLUJO PRINCIPAL — LISTENER DEL FORMULARIO                   ║
+     ║                                                              ║
+     ║  Usa addEventListener('submit') sobre el <form>, NUNCA       ║
+     ║  onclick inline. Razones:                                    ║
+     ║   • onclick inline es un vector XSS si se combina con       ║
+     ║     inyección de atributos HTML                               ║
+     ║   • addEventListener permite e.preventDefault() para          ║
+     ║     control total del flujo                                   ║
+     ║   • Separa markup de lógica (principio de responsabilidad)    ║
+     ║                                                              ║
+     ║  Orden de capas:                                              ║
+     ║   1. preventDefault()                                         ║
+     ║   2. Verificar bloqueo (anti-fuerza bruta)                    ║
+     ║   3. Verificar CAPTCHA                                        ║
+     ║   4. Sanitizar usuario (higiene de datos)                     ║
+     ║   5. Sanitizar contraseña (higiene de datos)                  ║
+     ║   6. Verificar política de clave                              ║
+     ║   7. Verificar credenciales                                   ║
+     ║   8. Manejar éxito o fallo                                    ║
+     ╚══════════════════════════════════════════════════════════════╝ */
+
+  formulario.addEventListener('submit', function(e) {
+    // CRÍTICO: impedir envío nativo del formulario.
+    // Sin esto, el navegador haría GET/POST exponiendo datos.
+    e.preventDefault();
+
+    ocultarMensaje();
+
+    var usuarioCrudo = campoUsuario.value;
+    var claveCruda = campoClave.value;
+    var idLog = usuarioCrudo.trim() || 'desconocido';
+
+    registrarEvento('info', idLog, 'Inicio de intento de autenticacion');
+
+    metricas.intentos++;
+    actualizarMetricas();
+
+    // ── CAPA 1: Verificar bloqueo por fuerza bruta ──
+    if (verificarBloqueo()) {
+      return;
     }
 
+    // ── Validación de campos requeridos ──
+    if (usuarioCrudo.trim() === '' || claveCruda.trim() === '') {
+      registrarEvento('advertencia', idLog,
+        'Campos obligatorios vacios — Intento rechazado');
+      mostrarMensaje('Todos los campos son obligatorios.', 'error');
+      registrarFallo(idLog);
+      generarCaptcha();
+      return;
+    }
 
-    /* ╔════════════════════════════════════════════════════════════╗
-       ║  FLUJO PRINCIPAL — LISTENER DEL FORMULARIO                ║
-       ║                                                           ║
-       ║  Orquesta las capas de defensa en orden:                  ║
-       ║   1. preventDefault() → control total del flujo           ║
-       ║   2. Verificar bloqueo (anti-fuerza bruta)                ║
-       ║   3. Sanitizar usuario (higiene de datos)                 ║
-       ║   4. Sanitizar contraseña (higiene de datos)              ║
-       ║   5. Verificar política de clave                          ║
-       ║   6. Verificar credenciales                               ║
-       ║   7. Manejar éxito o fallo                                ║
-       ╚════════════════════════════════════════════════════════════╝ */
+    // ── CAPA 2: Verificar CAPTCHA ──
+    if (!verificarCaptcha()) {
+      metricas.captchasFallidos++;
+      actualizarMetricas();
+      registrarEvento('advertencia', idLog,
+        'CAPTCHA incorrecto — Posible automatizacion — ' +
+        'Total CAPTCHA fallidos en sesion: ' + metricas.captchasFallidos);
+      // Mensaje opaco — no revelar que fue el CAPTCHA lo que falló
+      mostrarMensaje('Credenciales invalidas.', 'error');
+      registrarFallo(idLog);
+      generarCaptcha();
+      return;
+    }
 
-    formulario.addEventListener('submit', function(e) {
-      // preventDefault(): Impide el envío nativo del formulario.
-      // Esto es CRÍTICO: sin él, el navegador haría un GET/POST
-      // exponiendo datos en la URL o recargando la página,
-      // perdiendo el control del flujo de seguridad.
-      e.preventDefault();
+    // ── CAPA 3: Higiene de datos — Sanitizar usuario ──
+    var resultUsuario = sanitizarEntrada(usuarioCrudo, 'usuario', idLog);
+    if (!resultUsuario.valido) {
+      mostrarMensaje('Credenciales invalidas.', 'error');
+      registrarFallo(idLog);
+      generarCaptcha();
+      return;
+    }
 
-      // Ocultar mensajes anteriores
-      ocultarMensaje();
+    // ── CAPA 3: Higiene de datos — Sanitizar contraseña ──
+    var resultClave = sanitizarEntrada(claveCruda, 'clave', idLog);
+    if (!resultClave.valido) {
+      mostrarMensaje('Credenciales invalidas.', 'error');
+      registrarFallo(idLog);
+      generarCaptcha();
+      return;
+    }
 
-      // Obtener valores crudos antes de cualquier procesamiento
-      const usuarioCrudo = campoUsuario.value;
-      const claveCruda = campoClave.value;
+    // ── CAPA 4: Política de clave ──
+    var politica = verificarPoliticaClave(resultClave.valor, idLog);
+    if (!politica.cumple) {
+      mostrarMensaje('Credenciales invalidas.', 'error');
+      registrarFallo(idLog);
+      generarCaptcha();
+      return;
+    }
 
-      // Identificador para logging (si el usuario está vacío, usar "desconocido")
-      const idLog = usuarioCrudo.trim() || 'desconocido';
+    // ── CAPA 5: Verificación de credenciales ──
+    if (verificarCredenciales(resultUsuario.valor, resultClave.valor)) {
+      // ÉXITO
+      intentosFallidos = 0;
+      metricas.sesiones++;
+      actualizarMetricas();
 
-      registrarEvento('info', idLog, 'Inicio de intento de autenticación');
+      registrarEvento('info', resultUsuario.valor,
+        'Autenticacion EXITOSA — Acceso concedido — Contador reiniciado');
+      mostrarMensaje('Identidad verificada. Acceso concedido.', 'success');
 
-      // ── CAPA 1: Verificar bloqueo por fuerza bruta ──
-      if (verificarBloqueo()) {
-        return;
-      }
+      formulario.reset();
+      document.getElementById('entropyFill').style.width = '0%';
+      document.getElementById('entropyLabel').textContent = 'Entropia: 0 bits';
+      document.getElementById('entropyNivel').textContent = '--';
+      document.getElementById('entropyNivel').style.color = 'var(--text-dim)';
 
-      // ── Validación de campos requeridos ──
-      if (usuarioCrudo.trim() === '' || claveCruda.trim() === '') {
-        registrarEvento('advertencia', idLog,
-          'Campos obligatorios vacíos — Intento rechazado');
-        mostrarMensaje('Todos los campos son obligatorios.', 'error');
-        registrarFallo(idLog);
-        return;
-      }
+      generarCaptcha();
 
-      // ── CAPA 2: Higiene de datos — Sanitizar usuario ──
-      const resultUsuario = sanitizarEntrada(usuarioCrudo, 'usuario', idLog);
-      if (!resultUsuario.valido) {
-        registrarEvento('advertencia', idLog,
-          `Sanitización de usuario fallida: ${resultUsuario.razon}`);
-        // Mensaje opaco — no revelar el motivo específico al usuario
-        mostrarMensaje('Credenciales inválidas.', 'error');
-        registrarFallo(idLog);
-        return;
-      }
+      // Mostrar pantalla de acceso
+      setTimeout(function() {
+        document.getElementById('accessUsuario').textContent =
+          'Operador: ' + resultUsuario.valor;
+        document.getElementById('accessOverlay').classList.add('show');
+      }, 500);
+    } else {
+      // FALLO — Mensaje opaco
+      registrarEvento('advertencia', idLog,
+        'Credenciales no coinciden — Autenticacion denegada');
+      mostrarMensaje('Credenciales invalidas.', 'error');
+      registrarFallo(idLog);
+      generarCaptcha();
+    }
+  });
 
-      // ── CAPA 2: Higiene de datos — Sanitizar contraseña ──
-      const resultClave = sanitizarEntrada(claveCruda, 'clave', idLog);
-      if (!resultClave.valido) {
-        registrarEvento('advertencia', idLog,
-          `Sanitización de clave fallida: ${resultClave.razon}`);
-        // Mensaje opaco — no revelar el motivo específico al usuario
-        mostrarMensaje('Credenciales inválidas.', 'error');
-        registrarFallo(idLog);
-        return;
-      }
 
-      // ── CAPA 3: Política de clave ──
-      const politica = verificarPoliticaClave(resultClave.valor, idLog);
-      if (!politica.cumple) {
-        registrarEvento('advertencia', idLog,
-          `Política de clave no cumplida: ${politica.razon}`);
-        // Mensaje opaco — no especificar qué requisito falta
-        mostrarMensaje('Credenciales inválidas.', 'error');
-        registrarFallo(idLog);
-        return;
-      }
+  /* ╔══════════════════════════════════════════════════════════════╗
+     ║  PANTALLA DE ACCESO CONCEDIDO                                ║
+     ╚══════════════════════════════════════════════════════════════╝ */
 
-      // ── CAPA 4: Verificación de credenciales ──
-      if (verificarCredenciales(resultUsuario.valor, resultClave.valor)) {
-        // ÉXITO — Reiniciar estado y notificar
-        intentosFallidos = 0;
-        registrarEvento('info', resultUsuario.valor,
-          'Autenticación EXITOSA — Acceso concedido — ' +
-          'Contador de intentos reiniciado');
-        mostrarMensaje('Acceso concedido. Bienvenido al sistema.', 'success');
+  document.getElementById('btnCerrarAcceso').addEventListener('click', function() {
+    document.getElementById('accessOverlay').classList.remove('show');
+    registrarEvento('info', 'sistema', 'Sesion cerrada por el operador');
+  });
 
-        // Limpiar campos tras autenticación exitosa
-        formulario.reset();
-      } else {
-        // FALLO — Mensaje opaco + registrar intento
-        registrarEvento('advertencia', idLog,
-          'Credenciales no coinciden — Autenticación denegada');
-        mostrarMensaje('Credenciales inválidas.', 'error');
-        registrarFallo(idLog);
-      }
+
+  /* ╔══════════════════════════════════════════════════════════════╗
+     ║  FILTROS DEL SIEM                                            ║
+     ╚══════════════════════════════════════════════════════════════╝ */
+
+  document.querySelectorAll('.filter-badge').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      filtroActivo = this.dataset.filter;
+
+      document.querySelectorAll('.filter-badge').forEach(function(b) {
+        b.classList.remove('active');
+      });
+      this.classList.add('active');
+
+      // Aplicar filtro a entradas existentes
+      logFeed.querySelectorAll('.log-entry').forEach(function(el) {
+        if (filtroActivo === 'all' || el.dataset.nivel === filtroActivo) {
+          el.style.display = 'block';
+        } else {
+          el.style.display = 'none';
+        }
+      });
     });
+  });
 
-    // ── Registro de inicio del módulo ──
+
+  /* ╔══════════════════════════════════════════════════════════════╗
+     ║  EXPORTAR LOGS A CSV                                         ║
+     ║                                                              ║
+     ║  Genera un archivo CSV descargable con todos los eventos     ║
+     ║  registrados. Útil para análisis posterior o entrega de      ║
+     ║  evidencia en la actividad académica.                        ║
+     ╚══════════════════════════════════════════════════════════════╝ */
+
+  document.getElementById('btnExport').addEventListener('click', function() {
+    if (registroSIEM.length === 0) {
+      registrarEvento('advertencia', 'sistema', 'Exportacion cancelada — No hay eventos registrados');
+      return;
+    }
+
+    var header = 'Timestamp,Nivel,Usuario,Detalle,Fingerprint';
+    var rows = registroSIEM.map(function(e) {
+      return '"' + e.timestamp + '","' + e.nivel + '","' + e.usuario +
+             '","' + e.detalle.replace(/"/g, '""') + '","' + e.fingerprint + '"';
+    }).join('\n');
+
+    var blob = new Blob([header + '\n' + rows], { type: 'text/csv;charset=utf-8;' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+
+    var ts = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+    a.download = 'siem_logs_' + ts + '.csv';
+    a.click();
+
     registrarEvento('info', 'sistema',
-      'Módulo de autenticación inicializado — ' +
-      `Límite de intentos: ${MAX_INTENTOS} — ` +
-      'Estado: operativo');
-  </script>
+      'Logs exportados a CSV — ' + registroSIEM.length + ' eventos');
+  });
+
+
+  /* ╔══════════════════════════════════════════════════════════════╗
+     ║  RELOJ EN TIEMPO REAL                                        ║
+     ╚══════════════════════════════════════════════════════════════╝ */
+
+  function actualizarReloj() {
+    var ahora = new Date();
+    document.getElementById('reloj').textContent =
+      ahora.toLocaleTimeString('es', { hour12: false });
+    document.getElementById('fecha').textContent =
+      ahora.toLocaleDateString('es', { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  setInterval(actualizarReloj, 1000);
+  actualizarReloj();
+
+
+  /* ╔══════════════════════════════════════════════════════════════╗
+     ║  INICIALIZACIÓN                                              ║
+     ╚══════════════════════════════════════════════════════════════╝ */
+
+  generarCaptcha();
+
+  registrarEvento('info', 'sistema',
+    'Modulo de autenticacion v2.0 inicializado — ' +
+    'Capas: Anti-fuerza bruta (' + MAX_INTENTOS + ' intentos) + CAPTCHA + ' +
+    'Sanitizacion (allowlist + 8 patrones) + Politica de clave + Mensajes opacos — ' +
+    'Cooldown: ' + (COOLDOWN_MS / 1000) + 's — Estado: operativo');
+</script>
 
 </body>
 </html>
