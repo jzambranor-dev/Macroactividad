@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--
+    ╔══════════════════════════════════════════════════════════════════╗
+    ║  MEDISECURE — Portal de Resultados Médicos                     ║
+    ║  Macroactividad: Plan de Respuesta a Incidentes (NIST 800-61)  ║
+    ║  Componente: Página principal del portal post-autenticación     ║
+    ╚══════════════════════════════════════════════════════════════════╝
+
+    Este index.html representa el portal MediSecure descrito en el
+    Plan de Respuesta a Incidentes. Simula el dashboard al que accede
+    un usuario autenticado (o un atacante tras comprometer credenciales).
+
+    El sistema implementa:
+    - Verificación de sesión (Fase 1: Preparación)
+    - Registro de actividad tipo SIEM (Transversal)
+    - Modo mantenimiento activable (Fase 3: Contención)
+    - Indicadores de compromiso visibles en consola (Fase 2: Detección)
+    - Rate limiting y monitoreo (Fase 3: Recuperación)
+  -->
+  <title>MediSecure — Portal de Resultados Médicos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ═══ Barra superior ═══ */
+    .topbar {
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+      padding: 0 1.5rem;
+      height: 60px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .topbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .topbar-logo {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, #38bdf8, #6366f1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(56, 189, 248, 0.3);
+    }
+
+    .topbar-logo svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .topbar-brand h1 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #f1f5f9;
+      letter-spacing: -0.3px;
+    }
+
+    .topbar-brand h1 span {
+      color: #38bdf8;
+    }
+
+    .topbar-brand .badge {
+      font-size: 0.6rem;
+      font-weight: 500;
+      background: rgba(56, 189, 248, 0.1);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      padding: 0.2rem 0.55rem;
+      border-radius: 6px;
+      letter-spacing: 0.03em;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+    }
+
+    .session-info {
+      font-size: 0.78rem;
+      color: #64748b;
+    }
+
+    .session-info span {
+      color: #94a3b8;
+      font-weight: 500;
+    }
+
+    .btn-logout {
+      padding: 0.4rem 0.9rem;
+      background: rgba(239, 68, 68, 0.1);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-logout:hover {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+
+    /* ═══ Alerta de seguridad ═══ */
+    .alerta-mantenimiento {
+      background: linear-gradient(90deg, rgba(239, 68, 68, 0.12), rgba(239, 68, 68, 0.06));
+      border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+      padding: 0.55rem 1.5rem;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: #fca5a5;
+      text-align: center;
+      display: none;
+    }
+
+    .alerta-mantenimiento.activa {
+      display: block;
+    }
+
+    /* ═══ Contenido principal ═══ */
+    .main-content {
+      flex: 1;
+      padding: 1.5rem;
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    /* ═══ Panel de estado ═══ */
+    .panel-estado {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    @media (max-width: 900px) {
+      .panel-estado { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .estado-card {
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid rgba(148, 163, 184, 0.08);
+      border-radius: 12px;
+      padding: 1.2rem 1.3rem;
+      transition: border-color 0.2s ease;
+    }
+
+    .estado-card:hover {
+      border-color: rgba(148, 163, 184, 0.15);
+    }
+
+    .estado-card .label {
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: #64748b;
+      letter-spacing: 0.03em;
+      margin-bottom: 0.5rem;
+    }
+
+    .estado-card .valor {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+
+    .estado-card .valor.alerta {
+      color: #ef4444;
+    }
+
+    .estado-card .valor.advertencia {
+      color: #fbbf24;
+    }
+
+    /* ═══ Secciones / Cards ═══ */
+    .seccion {
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid rgba(148, 163, 184, 0.08);
+      border-radius: 12px;
+      margin-bottom: 1.2rem;
+      overflow: hidden;
+      transition: border-color 0.2s ease;
+    }
+
+    .seccion:hover {
+      border-color: rgba(148, 163, 184, 0.15);
+    }
+
+    .seccion-header {
+      padding: 1rem 1.3rem;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .seccion-header h2 {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #f1f5f9;
+      letter-spacing: -0.2px;
+    }
+
+    .seccion-header .tag {
+      font-size: 0.68rem;
+      font-weight: 500;
+      color: #64748b;
+      background: rgba(100, 116, 139, 0.1);
+      padding: 0.25rem 0.6rem;
+      border-radius: 6px;
+    }
+
+    .seccion-body {
+      padding: 1rem 1.3rem;
+    }
+
+    /* ═══ Tabla de resultados médicos ═══ */
+    .tabla-resultados {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .tabla-resultados th {
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      color: #64748b;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    }
+
+    .tabla-resultados td {
+      padding: 0.75rem;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.05);
+      font-size: 0.85rem;
+      color: #cbd5e1;
+    }
+
+    .tabla-resultados tbody tr {
+      transition: background 0.15s ease;
+    }
+
+    .tabla-resultados tbody tr:hover {
+      background: rgba(56, 189, 248, 0.03);
+    }
+
+    .badge-estado {
+      display: inline-block;
+      padding: 0.2rem 0.65rem;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .badge-disponible {
+      background: rgba(34, 197, 94, 0.1);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.2);
+    }
+
+    .badge-pendiente {
+      background: rgba(251, 191, 36, 0.1);
+      color: #fbbf24;
+      border: 1px solid rgba(251, 191, 36, 0.2);
+    }
+
+    .badge-critico {
+      background: rgba(239, 68, 68, 0.1);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    /* ═══ Log de actividad ═══ */
+    .log-entry {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.55rem 0;
+      font-size: 0.8rem;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.05);
+    }
+
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+
+    .log-time {
+      color: #475569;
+      white-space: nowrap;
+      min-width: 60px;
+      font-variant-numeric: tabular-nums;
+      font-size: 0.75rem;
+    }
+
+    .log-tipo {
+      min-width: 80px;
+      font-weight: 600;
+      font-size: 0.68rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding-top: 2px;
+    }
+
+    .log-tipo.info { color: #38bdf8; }
+    .log-tipo.warn { color: #fbbf24; }
+    .log-tipo.crit { color: #ef4444; }
+
+    .log-msg {
+      color: #94a3b8;
+      flex: 1;
+      line-height: 1.4;
+    }
+
+    /* ═══ Controles de respuesta a incidentes ═══ */
+    .controles-ir {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .btn-ir {
+      padding: 1rem 1.1rem;
+      background: transparent;
+      border: 1px solid rgba(148, 163, 184, 0.1);
+      border-radius: 10px;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      text-align: left;
+    }
+
+    .btn-ir:hover {
+      transform: translateY(-2px);
+    }
+
+    .btn-ir .btn-titulo {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 0.3rem;
+    }
+
+    .btn-ir .btn-desc {
+      display: block;
+      font-size: 0.72rem;
+      line-height: 1.5;
+      opacity: 0.5;
+    }
+
+    .btn-ir.contencion {
+      color: #fbbf24;
+      border-color: rgba(251, 191, 36, 0.2);
+      background: rgba(251, 191, 36, 0.04);
+    }
+    .btn-ir.contencion:hover {
+      background: rgba(251, 191, 36, 0.08);
+      border-color: rgba(251, 191, 36, 0.35);
+      box-shadow: 0 4px 20px rgba(251, 191, 36, 0.1);
+    }
+
+    .btn-ir.erradicacion {
+      color: #ef4444;
+      border-color: rgba(239, 68, 68, 0.2);
+      background: rgba(239, 68, 68, 0.04);
+    }
+    .btn-ir.erradicacion:hover {
+      background: rgba(239, 68, 68, 0.08);
+      border-color: rgba(239, 68, 68, 0.35);
+      box-shadow: 0 4px 20px rgba(239, 68, 68, 0.1);
+    }
+
+    .btn-ir.recuperacion {
+      color: #22c55e;
+      border-color: rgba(34, 197, 94, 0.2);
+      background: rgba(34, 197, 94, 0.04);
+    }
+    .btn-ir.recuperacion:hover {
+      background: rgba(34, 197, 94, 0.08);
+      border-color: rgba(34, 197, 94, 0.35);
+      box-shadow: 0 4px 20px rgba(34, 197, 94, 0.1);
+    }
+
+    .btn-ir.forense {
+      color: #a78bfa;
+      border-color: rgba(167, 139, 250, 0.2);
+      background: rgba(167, 139, 250, 0.04);
+    }
+    .btn-ir.forense:hover {
+      background: rgba(167, 139, 250, 0.08);
+      border-color: rgba(167, 139, 250, 0.35);
+      box-shadow: 0 4px 20px rgba(167, 139, 250, 0.1);
+    }
+
+    /* ═══ Footer ═══ */
+    .footer {
+      text-align: center;
+      padding: 1.2rem;
+      font-size: 0.72rem;
+      color: #475569;
+      border-top: 1px solid rgba(148, 163, 184, 0.06);
+    }
+
+    .footer span {
+      color: #64748b;
+    }
+
+    /* ═══ Overlay de mantenimiento ═══ */
+    .overlay-mantenimiento {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .overlay-mantenimiento.activo {
+      display: flex;
+    }
+
+    .overlay-contenido {
+      background: rgba(30, 41, 59, 0.9);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 16px;
+      padding: 2.5rem 3rem;
+      max-width: 500px;
+      text-align: center;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    .overlay-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 16px;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.5rem;
+    }
+
+    .overlay-icon svg {
+      width: 28px;
+      height: 28px;
+      stroke: #ef4444;
+      fill: none;
+      stroke-width: 2;
+    }
+
+    .overlay-contenido h2 {
+      color: #f1f5f9;
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+    }
+
+    .overlay-contenido p {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      line-height: 1.7;
+      margin-bottom: 0.5rem;
+    }
+
+    .overlay-contenido .ref {
+      font-size: 0.75rem;
+      color: #ef4444;
+      font-weight: 500;
+      margin-top: 0.8rem;
+    }
+
+    .overlay-contenido .btn-desactivar {
+      margin-top: 1.5rem;
+      padding: 0.65rem 1.8rem;
+      background: linear-gradient(135deg, #38bdf8, #6366f1);
+      color: #ffffff;
+      border: none;
+      border-radius: 10px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(56, 189, 248, 0.25);
+    }
+
+    .overlay-contenido .btn-desactivar:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 25px rgba(56, 189, 248, 0.35);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══ Overlay: Modo Mantenimiento (Fase 3 — Contención) ═══ -->
+  <div id="overlayMantenimiento" class="overlay-mantenimiento" role="alertdialog" aria-label="Modo mantenimiento activo">
+    <div class="overlay-contenido">
+      <div class="overlay-icon">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      </div>
+      <h2>Modo Mantenimiento Activo</h2>
+      <p>El portal MediSecure se encuentra temporalmente fuera de servicio por un procedimiento de seguridad.</p>
+      <p>Se ha detectado actividad anómala y el equipo de respuesta a incidentes está investigando.</p>
+      <p class="ref">Referencia: NIST SP 800-61 Rev. 2 — Fase 3: Contención</p>
+      <button class="btn-desactivar" onclick="desactivarMantenimiento()">Desactivar Mantenimiento</button>
+    </div>
+  </div>
+
+  <!-- ═══ Barra superior ═══ -->
+  <nav class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-logo">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 2L12 22M2 12L22 12M7 7L17 17M17 7L7 17" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+      <h1>Medi<span>Secure</span></h1>
+      <span class="badge">Portal de Resultados</span>
+    </div>
+    <div class="topbar-right">
+      <div class="session-info">
+        <span id="sesionUsuario">admin@medisecure.com</span> &middot; <span id="sesionTiempo"></span>
+      </div>
+      <button class="btn-logout" onclick="cerrarSesion()">Cerrar Sesión</button>
+    </div>
+  </nav>
+
+  <!-- ═══ Alerta de seguridad ═══ -->
+  <div id="alertaMantenimiento" class="alerta-mantenimiento">
+    Se detectaron intentos de acceso no autorizado desde IP 203.0.113.42 — Monitoreo reforzado activo
+  </div>
+
+  <!-- ═══ Contenido principal ═══ -->
+  <div class="main-content">
+
+    <!-- Panel de estado del sistema -->
+    <section class="panel-estado">
+      <div class="estado-card">
+        <div class="label">Estado del Sistema</div>
+        <div class="valor" id="estadoSistema">Operativo</div>
+      </div>
+      <div class="estado-card">
+        <div class="label">Nivel de Alerta</div>
+        <div class="valor advertencia" id="nivelAlerta">Elevado</div>
+      </div>
+      <div class="estado-card">
+        <div class="label">Intentos Fallidos (24h)</div>
+        <div class="valor alerta" id="intentosFallidos">47</div>
+      </div>
+      <div class="estado-card">
+        <div class="label">Última IP Sospechosa</div>
+        <div class="valor alerta">203.0.113.42</div>
+      </div>
+    </section>
+
+    <!-- Resultados médicos (datos simulados - PHI protegida por HIPAA) -->
+    <section class="seccion">
+      <div class="seccion-header">
+        <h2>Resultados Médicos Recientes</h2>
+        <span class="tag">HIPAA — PHI Protegida</span>
+      </div>
+      <div class="seccion-body">
+        <table class="tabla-resultados">
+          <thead>
+            <tr>
+              <th>ID Paciente</th>
+              <th>Estudio</th>
+              <th>Fecha</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>PAC-2026-0841</td>
+              <td>Hemograma completo</td>
+              <td>2026-03-26</td>
+              <td><span class="badge-estado badge-disponible">Disponible</span></td>
+            </tr>
+            <tr>
+              <td>PAC-2026-0839</td>
+              <td>Panel metabólico</td>
+              <td>2026-03-25</td>
+              <td><span class="badge-estado badge-disponible">Disponible</span></td>
+            </tr>
+            <tr>
+              <td>PAC-2026-0835</td>
+              <td>Perfil tiroideo</td>
+              <td>2026-03-25</td>
+              <td><span class="badge-estado badge-pendiente">En proceso</span></td>
+            </tr>
+            <tr>
+              <td>PAC-2026-0832</td>
+              <td>Radiografía torácica</td>
+              <td>2026-03-24</td>
+              <td><span class="badge-estado badge-disponible">Disponible</span></td>
+            </tr>
+            <tr>
+              <td>PAC-2026-0828</td>
+              <td>Uroanálisis</td>
+              <td>2026-03-24</td>
+              <td><span class="badge-estado badge-critico">Requiere atención</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Log de actividad reciente (Mini-SIEM) -->
+    <section class="seccion">
+      <div class="seccion-header">
+        <h2>Log de Actividad — SIEM</h2>
+        <span class="tag">Eventos de seguridad</span>
+      </div>
+      <div class="seccion-body" id="logActividad">
+        <div class="log-entry">
+          <span class="log-time">03:42:17</span>
+          <span class="log-tipo crit">Crítico</span>
+          <span class="log-msg">Acceso exitoso desde IP 203.0.113.42 — Fuera de horario laboral — IoC detectado</span>
+        </div>
+        <div class="log-entry">
+          <span class="log-time">03:41:58</span>
+          <span class="log-tipo crit">Crítico</span>
+          <span class="log-msg">Fuerza bruta detectada: 47 intentos fallidos en 12 minutos desde 203.0.113.42</span>
+        </div>
+        <div class="log-entry">
+          <span class="log-time">03:30:05</span>
+          <span class="log-tipo warn">Advertencia</span>
+          <span class="log-msg">Enumeración de usuarios detectada — Patrón OSINT identificado</span>
+        </div>
+        <div class="log-entry">
+          <span class="log-time">03:28:41</span>
+          <span class="log-tipo warn">Advertencia</span>
+          <span class="log-msg">Múltiples intentos de autenticación fallidos desde IP externa</span>
+        </div>
+        <div class="log-entry">
+          <span class="log-time">02:15:00</span>
+          <span class="log-tipo info">Info</span>
+          <span class="log-msg">Backup automático completado — Integridad verificada via hash SHA-256</span>
+        </div>
+        <div class="log-entry">
+          <span class="log-time">00:00:01</span>
+          <span class="log-tipo info">Info</span>
+          <span class="log-msg">Rotación de logs diaria ejecutada — Retención: 90 días</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Panel de Respuesta a Incidentes (NIST SP 800-61) -->
+    <section class="seccion">
+      <div class="seccion-header">
+        <h2>Respuesta a Incidentes — NIST SP 800-61</h2>
+        <span class="tag">Comité de Crisis</span>
+      </div>
+      <div class="seccion-body">
+        <div class="controles-ir">
+
+          <button class="btn-ir contencion" onclick="activarMantenimiento()">
+            <span class="btn-titulo">Fase 3A: Contención</span>
+            <span class="btn-desc">Activar modo mantenimiento, bloquear IP maliciosa, desactivar cuenta comprometida</span>
+          </button>
+
+          <button class="btn-ir erradicacion" onclick="ejecutarErradicacion()">
+            <span class="btn-titulo">Fase 3B: Erradicación</span>
+            <span class="btn-desc">Eliminar sesiones activas, limpiar tokens en localStorage, revisar persistencia</span>
+          </button>
+
+          <button class="btn-ir recuperacion" onclick="ejecutarRecuperacion()">
+            <span class="btn-titulo">Fase 3C: Recuperación</span>
+            <span class="btn-desc">Restablecer credenciales, restaurar desde backup, activar rate limiting</span>
+          </button>
+
+          <button class="btn-ir forense" onclick="ejecutarForense()">
+            <span class="btn-titulo">Fase 4: Post-Incidente</span>
+            <span class="btn-desc">Análisis forense, lecciones aprendidas, implementar MFA y CAPTCHA</span>
+          </button>
+
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ═══ Footer ═══ -->
+  <footer class="footer">
+    MediSecure &copy; 2026 &middot; <span>HIPAA Compliant</span> &middot; NIST SP 800-61 Rev. 2 &middot; <span>Defense in Depth</span>
+  </footer>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       JAVASCRIPT — Lógica del Portal y Respuesta a Incidentes
+       ═══════════════════════════════════════════════════════════════ -->
+  <script>
+    'use strict';
+
+    /* ╔════════════════════════════════════════════════════════════╗
+       ║  SISTEMA DE LOGGING / TRAZABILIDAD (Mini-SIEM)           ║
+       ║  Hereda el mismo formato del módulo de autenticación     ║
+       ╚════════════════════════════════════════════════════════════╝ */
+
+    function registrarEvento(nivel, usuario, detalle) {
+      const timestamp = new Date().toISOString();
+      const nivelUpper = nivel.toUpperCase().padEnd(12);
+      const prefijo = '[MEDISECURE-SIEM]';
+      const mensaje = `${prefijo} ${timestamp} | ${nivelUpper} | usuario: ${usuario} | ${detalle}`;
+
+      switch (nivel) {
+        case 'info':
+          console.log('%c' + mensaje, 'color: #38bdf8');
+          break;
+        case 'advertencia':
+          console.warn('%c' + mensaje, 'color: #fbbf24');
+          break;
+        case 'critico':
+          console.error('%c' + mensaje, 'color: #ef4444; font-weight: bold');
+          break;
+        default:
+          console.log(mensaje);
+      }
+    }
+
+    /* ╔════════════════════════════════════════════════════════════╗
+       ║  VERIFICACIÓN DE SESIÓN (Fase 1: Preparación)            ║
+       ╚════════════════════════════════════════════════════════════╝ */
+
+    function verificarSesion() {
+      const sesion = sessionStorage.getItem('medisecure_sesion');
+      if (!sesion) {
+        registrarEvento('advertencia', 'sistema',
+          'Acceso sin sesión válida — Redirigiendo a autenticación');
+        window.location.href = 'login.html';
+        return false;
+      }
+
+      try {
+        const datos = JSON.parse(sesion);
+        document.getElementById('sesionUsuario').textContent = datos.usuario || 'desconocido';
+        registrarEvento('info', datos.usuario,
+          'Sesión verificada — Acceso al portal autorizado');
+        return true;
+      } catch (e) {
+        registrarEvento('critico', 'sistema',
+          'Token de sesión corrupto detectado — Posible manipulación — IoC');
+        sessionStorage.removeItem('medisecure_sesion');
+        window.location.href = 'login.html';
+        return false;
+      }
+    }
+
+    /* ╔════════════════════════════════════════════════════════════╗
+       ║  RELOJ DE SESIÓN                                          ║
+       ╚════════════════════════════════════════════════════════════╝ */
+
+    function actualizarReloj() {
+      const ahora = new Date();
+      const horas = String(ahora.getHours()).padStart(2, '0');
+      const minutos = String(ahora.getMinutes()).padStart(2, '0');
+      const segundos = String(ahora.getSeconds()).padStart(2, '0');
+      document.getElementById('sesionTiempo').textContent = `${horas}:${minutos}:${segundos}`;
+    }
+
+    setInterval(actualizarReloj, 1000);
+    actualizarReloj();
+
+    /* ╔════════════════════════════════════════════════════════════╗
+       ║  CERRAR SESIÓN                                            ║
+       ╚════════════════════════════════════════════════════════════╝ */
+
+    function cerrarSesion() {
+      const usuario = document.getElementById('sesionUsuario').textContent;
+      registrarEvento('info', usuario, 'Cierre de sesión voluntario');
+      sessionStorage.removeItem('medisecure_sesion');
+      window.location.href = 'login.html';
+    }
+
+    /* ╔════════════════════════════════════════════════════════════╗
+       ║  FASE 3A: CONTENCIÓN — Modo Mantenimiento                ║
+       ║                                                           ║
+       ║  Según el plan de respuesta:                              ║
+       ║  - Desactivación de la cuenta comprometida                ║
+       ║  - Activación de modo mantenimiento en la plataforma      ║
+       ║  - Bloqueo de IP maliciosa en firewall                    ║
+       ╚════════════════════════════════════════════════════════════╝ */
+
+    function activarMantenimiento() {
+      registrarEvento('critico', 'CISO',
+        'FASE 3A ACTIVADA — Modo mantenimiento — ' +
+        'IP 203.0.113.42 bloqueada — Cuenta admin@medisecure.com desactivada');
+
+      document.getElementById('overlayMantenimiento').classList.add('activo');
+      document.getElementById('alertaMantenimiento').classList.add('activa');
+      document.getElementById('estadoSistema').textContent = 'Mantenimiento';
+      document.getElementById('estadoSistema').classList.add('alerta');
+
+      agregarLogUI('Crítico', 'crit',
+        'Modo mantenimiento ACTIVADO — Portal suspendido — Contención en curso');
+    }
+
+    function desactivarMantenimiento() {
+      registrarEvento('info', 'CISO',
+        'Modo mantenimiento desactivado — Portal restaurado');
+
+      document.getElementById('overlayMantenimiento').classList.remove('activo');
+      document.getElementById('estadoSistema').textContent = 'Restaurado';
+      document.getElementById('estadoSistema').classList.remove('alerta');
+      document.getElementById('estadoSistema').classList.add('advertencia');
+
+      agregarLogUI('Info', 'info',
+        'Modo mantenimiento desactivado — Portal operativo con monitoreo reforzado');
+    }
+
+    /* ╔════════════════════════════════════════════════════════════╗
+       ║  FASE 3B: ERRADICACIÓN                                   ║
+       ║                                                           ║
+       ║  Según el plan de respuesta:                              ║
+       ║  - Eliminación de sesiones activas y tokens comprometidos ║
+       ║  - Limpieza de scripts maliciosos en localStorage         ║
+       ║  - Revisión completa en busca de persistencia             ║
+       ╚════════════════════════════════════════════════════════════╝ */
+
+    function ejecutarErradicacion() {
+      registrarEvento('critico', 'Líder Técnico',
+        'FASE 3B ACTIVADA — Erradicación en curso');
+
+      const itemsAntes = localStorage.length;
+      localStorage.clear();
+
+      registrarEvento('info', 'Líder Técnico',
+        `localStorage limpiado — ${itemsAntes} item(s) eliminados — ` +
+        'Tokens comprometidos revocados');
+
+      registrarEvento('info', 'Líder Técnico',
+        'Revisión de persistencia completada — No se encontraron backdoors adicionales');
+
+      agregarLogUI('Crítico', 'crit',
+        `Erradicación ejecutada — localStorage limpiado (${itemsAntes} items) — Tokens revocados`);
+
+      document.getElementById('nivelAlerta').textContent = 'En Erradicación';
+      document.getElementById('nivelAlerta').classList.remove('advertencia');
+      document.getElementById('nivelAlerta').classList.add('alerta');
+    }
+
+    /* ╔════════════════════════════════════════════════════════════╗
+       ║  FASE 3C: RECUPERACIÓN                                   ║
+       ║                                                           ║
+       ║  Según el plan de respuesta:                              ║
+       ║  - Restablecimiento seguro de credenciales                ║
+       ║  - Restauración desde backups verificados                 ║
+       ║  - Implementación de rate limiting y monitoreo reforzado  ║
+       ╚════════════════════════════════════════════════════════════╝ */
+
+    function ejecutarRecuperacion() {
+      registrarEvento('info', 'Líder Técnico',
+        'FASE 3C ACTIVADA — Recuperación en curso');
+
+      registrarEvento('info', 'Líder Técnico',
+        'Credenciales restablecidas — Hash bcrypt regenerado con sal aleatoria');
+
+      registrarEvento('info', 'Líder Técnico',
+        'Backup restaurado desde GitHub — Integridad verificada via SHA-256');
+
+      registrarEvento('info', 'Líder Técnico',
+        'Rate Limiting activado: máximo 5 intentos por minuto por IP — ' +
+        'Monitoreo en tiempo real activo');
+
+      agregarLogUI('Info', 'info',
+        'Recuperación completada — Credenciales restablecidas — Rate Limiting activo — Backup restaurado');
+
+      document.getElementById('estadoSistema').textContent = 'Recuperado';
+      document.getElementById('estadoSistema').className = 'valor';
+      document.getElementById('estadoSistema').style.color = '#38bdf8';
+      document.getElementById('nivelAlerta').textContent = 'Normal';
+      document.getElementById('nivelAlerta').className = 'valor';
+      document.getElementById('nivelAlerta').style.color = '#38bdf8';
+      document.getElementById('intentosFallidos').textContent = '0';
+      document.getElementById('intentosFallidos').className = 'valor';
+      document.getElementById('intentosFallidos').style.color = '#38bdf8';
+    }
+
+    /* ╔════════════════════════════════════════════════════════════╗
+       ║  FASE 4: POST-INCIDENTE — Lecciones Aprendidas           ║
+       ║                                                           ║
+       ║  Según el plan de respuesta:                              ║
+       ║  - Implementación obligatoria de MFA                      ║
+       ║  - Integración de CAPTCHA adaptativo                      ║
+       ║  - Auditoría trimestral de permisos de acceso             ║
+       ╚════════════════════════════════════════════════════════════╝ */
+
+    function ejecutarForense() {
+      registrarEvento('info', 'Comité de Crisis',
+        'FASE 4 ACTIVADA — Análisis post-incidente');
+
+      registrarEvento('info', 'Comité de Crisis',
+        'Hallazgo: Ausencia de MFA fue el punto de falla principal (ref: OWASP 2021)');
+
+      registrarEvento('info', 'Comité de Crisis',
+        'Acción Correctiva 1: MFA obligatorio para cuentas con privilegios elevados');
+
+      registrarEvento('info', 'Comité de Crisis',
+        'Acción Correctiva 2: CAPTCHA adaptativo integrado en flujo de autenticación');
+
+      registrarEvento('info', 'Comité de Crisis',
+        'Auditoría trimestral de permisos programada — Próxima revisión: 2026-06-27');
+
+      agregarLogUI('Info', 'info',
+        'Post-incidente: MFA implementado — CAPTCHA activo — Auditoría trimestral programada');
+
+      alert(
+        '=== INFORME POST-INCIDENTE ===\n\n' +
+        'Causa raíz: Ausencia de MFA permitió acceso tras fuerza bruta exitosa.\n\n' +
+        'Acciones correctivas implementadas:\n' +
+        '1. MFA obligatorio para cuentas privilegiadas\n' +
+        '2. CAPTCHA adaptativo en el flujo de login\n' +
+        '3. Auditoría trimestral de permisos de acceso\n\n' +
+        'Referencia: NIST SP 800-61 Rev. 2 — OWASP 2021\n' +
+        'Responsable: Comité de Crisis — Carlos Martínez (CISO)'
+      );
+    }
+
+    /* ╔════════════════════════════════════════════════════════════╗
+       ║  UTILIDAD: Agregar entrada al log visual                  ║
+       ╚════════════════════════════════════════════════════════════╝ */
+
+    function agregarLogUI(tipo, clase, mensaje) {
+      const log = document.getElementById('logActividad');
+      const ahora = new Date();
+      const hora = `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}:${String(ahora.getSeconds()).padStart(2, '0')}`;
+
+      const entrada = document.createElement('div');
+      entrada.className = 'log-entry';
+      entrada.innerHTML =
+        `<span class="log-time">${hora}</span>` +
+        `<span class="log-tipo ${clase}">${tipo}</span>` +
+        `<span class="log-msg">${mensaje}</span>`;
+
+      log.insertBefore(entrada, log.firstChild);
+    }
+
+    /* ╔════════════════════════════════════════════════════════════╗
+       ║  INICIALIZACIÓN                                           ║
+       ╚════════════════════════════════════════════════════════════╝ */
+
+    // Verificar sesión al cargar (comentar para demo sin autenticarse)
+    // verificarSesion();
+
+    registrarEvento('info', 'sistema',
+      'Portal MediSecure inicializado — ' +
+      'Nivel de alerta: Elevado — ' +
+      'Monitoreo SIEM activo');
+
+    registrarEvento('advertencia', 'sistema',
+      'IoC activo: IP 203.0.113.42 detectada en intentos de fuerza bruta — ' +
+      'Recomendación: Ejecutar protocolo de contención');
+  </script>
+
+</body>
+</html>

@@ -18,12 +18,11 @@
       Capa 4 — Autenticación simulada con mensajes opacos
       Transversal — Sistema de logging / trazabilidad tipo SIEM
   -->
-  <title>Auth Module — Seguridad Defensiva</title>
+  <title>MediSecure — Iniciar Sesión</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-  <!-- ═══════════════════════════════════════════════════════════════
-       ESTILOS — Estética "terminal / defensiva"
-       Fondo oscuro, tipografía monoespaciada, diseño limpio
-       ═══════════════════════════════════════════════════════════════ -->
   <style>
     *, *::before, *::after {
       box-sizing: border-box;
@@ -32,223 +31,385 @@
     }
 
     body {
-      font-family: 'Courier New', 'Lucida Console', monospace;
-      background-color: #0a0e17;
-      color: #c8d6e5;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       min-height: 100vh;
       display: flex;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+      color: #e2e8f0;
+      overflow: hidden;
+    }
+
+    /* ═══ Panel izquierdo — Branding ═══ */
+    .brand-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
-      padding: 1rem;
+      padding: 3rem;
+      position: relative;
+      overflow: hidden;
     }
 
-    .auth-container {
-      background-color: #111927;
-      border: 1px solid #1e3a5f;
-      border-radius: 6px;
-      padding: 2.5rem 2rem;
-      width: 100%;
-      max-width: 420px;
-      box-shadow: 0 0 30px rgba(30, 58, 95, 0.3);
+    .brand-panel::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle at 30% 50%, rgba(56, 189, 248, 0.08) 0%, transparent 50%),
+                  radial-gradient(circle at 70% 80%, rgba(99, 102, 241, 0.06) 0%, transparent 40%);
+      animation: pulseGlow 8s ease-in-out infinite alternate;
     }
 
-    .auth-header {
+    @keyframes pulseGlow {
+      0% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+
+    .brand-content {
+      position: relative;
+      z-index: 1;
       text-align: center;
+      max-width: 400px;
+    }
+
+    .brand-logo {
+      width: 72px;
+      height: 72px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #38bdf8, #6366f1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.5rem;
+      box-shadow: 0 8px 32px rgba(56, 189, 248, 0.25);
+    }
+
+    .brand-logo svg {
+      width: 36px;
+      height: 36px;
+      fill: white;
+    }
+
+    .brand-content h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      letter-spacing: -0.5px;
+      margin-bottom: 0.5rem;
+    }
+
+    .brand-content h1 span {
+      color: #38bdf8;
+    }
+
+    .brand-content p {
+      font-size: 0.95rem;
+      color: #94a3b8;
+      line-height: 1.6;
+      font-weight: 300;
+    }
+
+    .brand-features {
+      margin-top: 2.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      text-align: left;
+    }
+
+    .brand-feature {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.85rem;
+      color: #94a3b8;
+    }
+
+    .brand-feature-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .brand-feature-icon svg {
+      width: 16px;
+      height: 16px;
+      stroke: #38bdf8;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* ═══ Panel derecho — Formulario ═══ */
+    .login-panel {
+      width: 480px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 3rem;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(20px);
+      border-left: 1px solid rgba(148, 163, 184, 0.08);
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 360px;
+      margin: 0 auto;
+    }
+
+    .login-header {
       margin-bottom: 2rem;
     }
 
-    .auth-header h1 {
-      font-size: 1.1rem;
-      color: #4fd1c5;
-      letter-spacing: 2px;
-      text-transform: uppercase;
+    .login-header h2 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #f1f5f9;
       margin-bottom: 0.4rem;
     }
 
-    .auth-header p {
-      font-size: 0.7rem;
-      color: #5a6a7a;
-      letter-spacing: 1px;
-    }
-
-    .separator {
-      border: none;
-      border-top: 1px solid #1e3a5f;
-      margin: 1.2rem 0;
+    .login-header p {
+      font-size: 0.875rem;
+      color: #64748b;
+      font-weight: 400;
     }
 
     .form-group {
-      margin-bottom: 1.2rem;
+      margin-bottom: 1.25rem;
     }
 
     label {
       display: block;
-      font-size: 0.75rem;
-      color: #4fd1c5;
-      margin-bottom: 0.4rem;
-      letter-spacing: 1px;
-      text-transform: uppercase;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: #94a3b8;
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.025em;
     }
 
     input[type="text"],
     input[type="password"] {
       width: 100%;
-      padding: 0.7rem 0.8rem;
-      background-color: #0a0e17;
-      border: 1px solid #1e3a5f;
-      border-radius: 4px;
-      color: #c8d6e5;
-      font-family: 'Courier New', monospace;
+      padding: 0.75rem 1rem;
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.15);
+      border-radius: 10px;
+      color: #e2e8f0;
+      font-family: 'Inter', sans-serif;
       font-size: 0.9rem;
-      transition: border-color 0.2s ease;
+      transition: all 0.2s ease;
     }
 
     input:focus {
       outline: none;
-      border-color: #4fd1c5;
-      box-shadow: 0 0 6px rgba(79, 209, 197, 0.15);
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+      background: rgba(30, 41, 59, 1);
     }
 
     input::placeholder {
-      color: #3a4a5a;
+      color: #475569;
     }
 
     .btn-login {
       width: 100%;
-      padding: 0.75rem;
-      margin-top: 0.5rem;
-      background-color: #1e3a5f;
-      color: #4fd1c5;
-      border: 1px solid #4fd1c5;
-      border-radius: 4px;
-      font-family: 'Courier New', monospace;
-      font-size: 0.85rem;
-      letter-spacing: 2px;
-      text-transform: uppercase;
+      padding: 0.8rem;
+      margin-top: 0.75rem;
+      background: linear-gradient(135deg, #38bdf8, #6366f1);
+      color: #ffffff;
+      border: none;
+      border-radius: 10px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 600;
+      letter-spacing: 0.025em;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(56, 189, 248, 0.25);
     }
 
     .btn-login:hover:not(:disabled) {
-      background-color: #4fd1c5;
-      color: #0a0e17;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 25px rgba(56, 189, 248, 0.35);
+    }
+
+    .btn-login:active:not(:disabled) {
+      transform: translateY(0);
     }
 
     .btn-login:disabled {
-      opacity: 0.3;
+      opacity: 0.4;
       cursor: not-allowed;
-      border-color: #5a6a7a;
-      color: #5a6a7a;
+      background: #475569;
+      box-shadow: none;
     }
 
-    /* Área de mensajes al usuario — opaca por diseño */
     .msg-area {
       margin-top: 1rem;
-      padding: 0.6rem 0.8rem;
-      border-radius: 4px;
-      font-size: 0.78rem;
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      font-size: 0.82rem;
       text-align: center;
       display: none;
-      letter-spacing: 0.5px;
+      font-weight: 500;
     }
 
     .msg-area.error {
       display: block;
-      background-color: rgba(235, 87, 87, 0.12);
-      border: 1px solid #eb5757;
-      color: #eb5757;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
     }
 
     .msg-area.success {
       display: block;
-      background-color: rgba(79, 209, 197, 0.12);
-      border: 1px solid #4fd1c5;
-      color: #4fd1c5;
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #86efac;
     }
 
     .msg-area.blocked {
       display: block;
-      background-color: rgba(235, 87, 87, 0.2);
-      border: 1px solid #eb5757;
-      color: #eb5757;
-      font-weight: bold;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+      font-weight: 600;
     }
 
-    .footer-info {
-      margin-top: 1.5rem;
+    .login-footer {
+      margin-top: 2rem;
       text-align: center;
-      font-size: 0.6rem;
-      color: #3a4a5a;
-      letter-spacing: 1px;
+      font-size: 0.72rem;
+      color: #475569;
+      line-height: 1.8;
+    }
+
+    .login-footer span {
+      color: #64748b;
+    }
+
+    /* ═══ Responsive ═══ */
+    @media (max-width: 900px) {
+      body { flex-direction: column; overflow: auto; }
+      .brand-panel { min-height: 40vh; padding: 2rem; }
+      .login-panel {
+        width: 100%;
+        min-height: auto;
+        border-left: none;
+        border-top: 1px solid rgba(148, 163, 184, 0.08);
+        padding: 2rem;
+      }
+      .brand-features { display: none; }
     }
   </style>
 </head>
 <body>
 
-  <!-- ═══════════════════════════════════════════════════════════════
-       CAPA 0 — HTML DEFENSIVO
-       Atributos de seguridad aplicados directamente en el markup:
-       • autocomplete="off" → evita que el navegador almacene y sugiera
-         credenciales en campos sensibles, reduciendo la superficie de
-         ataque si el dispositivo es compartido.
-       • spellcheck="false" → impide que el corrector envíe fragmentos
-         del campo a servicios externos de revisión ortográfica.
-       • type="password" → enmascara la entrada visualmente.
-       • required → validación nativa del navegador como primera barrera.
-       • maxlength → limita la longitud de la entrada como defensa contra
-         payloads excesivamente largos.
-       ═══════════════════════════════════════════════════════════════ -->
-  <main class="auth-container" role="main">
-    <header class="auth-header">
-      <h1>[ Auth Module ]</h1>
-      <p>Secure Frontend Authentication</p>
-    </header>
-
-    <hr class="separator">
-
-    <form id="formSeguro" novalidate>
-      <div class="form-group">
-        <label for="campoUsuario">Usuario</label>
-        <input
-          type="text"
-          id="campoUsuario"
-          name="usuario"
-          placeholder="Ingrese su usuario"
-          required
-          maxlength="30"
-          autocomplete="off"
-          spellcheck="false"
-          aria-label="Nombre de usuario"
-        >
+  <!-- ═══ Panel izquierdo: Branding MediSecure ═══ -->
+  <div class="brand-panel">
+    <div class="brand-content">
+      <div class="brand-logo">
+        <svg viewBox="0 0 24 24"><path d="M12 2L12 22M2 12L22 12M7 7L17 17M17 7L7 17" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
       </div>
+      <h1>Medi<span>Secure</span></h1>
+      <p>Portal de Resultados Médicos con seguridad de nivel empresarial</p>
 
-      <div class="form-group">
-        <label for="campoClave">Contraseña</label>
-        <input
-          type="password"
-          id="campoClave"
-          name="clave"
-          placeholder="Ingrese su contraseña"
-          required
-          maxlength="64"
-          autocomplete="off"
-          spellcheck="false"
-          aria-label="Contraseña"
-        >
+      <div class="brand-features">
+        <div class="brand-feature">
+          <div class="brand-feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          Defense in Depth — Múltiples capas de protección
+        </div>
+        <div class="brand-feature">
+          <div class="brand-feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+          </div>
+          Cumplimiento HIPAA — Datos clínicos protegidos
+        </div>
+        <div class="brand-feature">
+          <div class="brand-feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          </div>
+          NIST SP 800-61 — Respuesta a incidentes integrada
+        </div>
       </div>
-
-      <button type="submit" id="btnLogin" class="btn-login">
-        [ Iniciar Sesión ]
-      </button>
-
-      <!-- Área de mensajes — siempre opaca, nunca revela qué campo falló -->
-      <div id="msgArea" class="msg-area" role="alert" aria-live="polite"></div>
-    </form>
-
-    <div class="footer-info">
-      Defense in Depth &middot; Frontend Layer
     </div>
-  </main>
+  </div>
+
+  <!-- ═══ Panel derecho: Formulario de autenticación ═══ -->
+  <!--
+    CAPA 0 — HTML DEFENSIVO
+    Atributos de seguridad aplicados directamente en el markup:
+    • autocomplete="off" → evita que el navegador almacene credenciales
+    • spellcheck="false" → impide envío a servicios de revisión ortográfica
+    • type="password" → enmascara la entrada visualmente
+    • required → validación nativa como primera barrera
+    • maxlength → limita longitud contra payloads largos
+  -->
+  <div class="login-panel">
+    <div class="login-card">
+      <div class="login-header">
+        <h2>Iniciar sesión</h2>
+        <p>Ingrese sus credenciales para acceder al portal</p>
+      </div>
+
+      <form id="formSeguro" novalidate>
+        <div class="form-group">
+          <label for="campoUsuario">Usuario</label>
+          <input
+            type="text"
+            id="campoUsuario"
+            name="usuario"
+            placeholder="Ingrese su usuario"
+            required
+            maxlength="30"
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="Nombre de usuario"
+          >
+        </div>
+
+        <div class="form-group">
+          <label for="campoClave">Contraseña</label>
+          <input
+            type="password"
+            id="campoClave"
+            name="clave"
+            placeholder="Ingrese su contraseña"
+            required
+            maxlength="64"
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="Contraseña"
+          >
+        </div>
+
+        <button type="submit" id="btnLogin" class="btn-login">
+          Iniciar Sesión
+        </button>
+
+        <div id="msgArea" class="msg-area" role="alert" aria-live="polite"></div>
+      </form>
+
+      <div class="login-footer">
+        Defense in Depth &middot; Frontend Layer<br>
+        <span>HIPAA Compliant &middot; NIST SP 800-61 Rev. 2</span>
+      </div>
+    </div>
+  </div>
 
   <!-- ═══════════════════════════════════════════════════════════════
        JAVASCRIPT — LÓGICA DEFENSIVA
@@ -314,13 +475,13 @@
 
       switch (nivel) {
         case 'info':
-          console.log('%c' + mensaje, 'color: #4fd1c5');
+          console.log('%c' + mensaje, 'color: #38bdf8');
           break;
         case 'advertencia':
-          console.warn('%c' + mensaje, 'color: #f2c94c');
+          console.warn('%c' + mensaje, 'color: #fbbf24');
           break;
         case 'critico':
-          console.error('%c' + mensaje, 'color: #eb5757; font-weight: bold');
+          console.error('%c' + mensaje, 'color: #ef4444; font-weight: bold');
           break;
         default:
           console.log(mensaje);
@@ -440,11 +601,9 @@
        ╚════════════════════════════════════════════════════════════╝ */
 
     // Caracteres permitidos: alfanuméricos, guion, guion bajo, punto
-    // Esto cubre nombres de usuario razonables sin abrir superficie de ataque
     const REGEX_USUARIO_VALIDO = /^[a-zA-Z0-9_\-\.]+$/;
 
-    // Caracteres permitidos en contraseña: alfanuméricos y caracteres especiales
-    // comunes en políticas de clave, sin incluir caracteres de control o markup
+    // Caracteres permitidos en contraseña: alfanuméricos y especiales comunes
     const REGEX_CLAVE_VALIDA = /^[a-zA-Z0-9!@#$%^&*()_\-+=.,?]+$/;
 
     // Patrones de ataque conocidos (case-insensitive)
@@ -467,16 +626,12 @@
      * @returns {{ valido: boolean, valor: string, razon: string }}
      */
     function sanitizarEntrada(valor, campo, usuario) {
-      // Eliminar espacios al inicio y final (trim defensivo)
       const valorLimpio = valor.trim();
 
-      // Verificar que no esté vacío después del trim
       if (valorLimpio.length === 0) {
         return { valido: false, valor: '', razon: 'Campo vacío tras sanitización' };
       }
 
-      // Detección de patrones maliciosos — se evalúa ANTES del allowlist
-      // porque queremos registrar el tipo específico de ataque detectado
       for (let i = 0; i < PATRONES_MALICIOSOS.length; i++) {
         if (PATRONES_MALICIOSOS[i].test(valorLimpio)) {
           registrarEvento('advertencia', usuario,
@@ -490,7 +645,6 @@
         }
       }
 
-      // Validación por allowlist según el tipo de campo
       const regex = campo === 'usuario' ? REGEX_USUARIO_VALIDO : REGEX_CLAVE_VALIDA;
 
       if (!regex.test(valorLimpio)) {
@@ -516,18 +670,8 @@
        ║   • Al menos una letra mayúscula                          ║
        ║   • Al menos una letra minúscula                          ║
        ║   • Al menos un número                                    ║
-       ║                                                           ║
-       ║  Esta capa se evalúa DESPUÉS de la sanitización para      ║
-       ║  garantizar que la clave ya está limpia antes de          ║
-       ║  verificar su complejidad.                                ║
        ╚════════════════════════════════════════════════════════════╝ */
 
-    /**
-     * Verifica que la contraseña cumpla la política de complejidad.
-     * @param {string} clave   - Contraseña ya sanitizada
-     * @param {string} usuario - Identificador para logging
-     * @returns {{ cumple: boolean, razon: string }}
-     */
     function verificarPoliticaClave(clave, usuario) {
       if (clave.length < 8) {
         registrarEvento('advertencia', usuario,
@@ -559,27 +703,9 @@
 
     /* ╔════════════════════════════════════════════════════════════╗
        ║  AUTENTICACIÓN SIMULADA + MENSAJES OPACOS                ║
-       ║                                                           ║
-       ║  La verificación de credenciales se realiza comparando    ║
-       ║  ambos campos de forma conjunta. Nunca se revela cuál de  ║
-       ║  los dos campos es incorrecto — esto previene la          ║
-       ║  enumeración de usuarios (un atacante no puede descubrir  ║
-       ║  si un nombre de usuario existe o no).                    ║
-       ║                                                           ║
-       ║  Flujo de éxito:                                          ║
-       ║   • Reiniciar contador de intentos                        ║
-       ║   • Registrar evento info                                 ║
-       ║   • Mostrar mensaje de acceso concedido                   ║
        ╚════════════════════════════════════════════════════════════╝ */
 
-    /**
-     * Simula la verificación de credenciales.
-     * @param {string} usuario - Usuario sanitizado
-     * @param {string} clave   - Clave sanitizada
-     * @returns {boolean}
-     */
     function verificarCredenciales(usuario, clave) {
-      // Comparación conjunta — nunca revelar qué campo falló
       return usuario === CREDENCIALES_DEMO.usuario &&
              clave === CREDENCIALES_DEMO.clave;
     }
@@ -587,32 +713,14 @@
 
     /* ╔════════════════════════════════════════════════════════════╗
        ║  FLUJO PRINCIPAL — LISTENER DEL FORMULARIO                ║
-       ║                                                           ║
-       ║  Orquesta las capas de defensa en orden:                  ║
-       ║   1. preventDefault() → control total del flujo           ║
-       ║   2. Verificar bloqueo (anti-fuerza bruta)                ║
-       ║   3. Sanitizar usuario (higiene de datos)                 ║
-       ║   4. Sanitizar contraseña (higiene de datos)              ║
-       ║   5. Verificar política de clave                          ║
-       ║   6. Verificar credenciales                               ║
-       ║   7. Manejar éxito o fallo                                ║
        ╚════════════════════════════════════════════════════════════╝ */
 
     formulario.addEventListener('submit', function(e) {
-      // preventDefault(): Impide el envío nativo del formulario.
-      // Esto es CRÍTICO: sin él, el navegador haría un GET/POST
-      // exponiendo datos en la URL o recargando la página,
-      // perdiendo el control del flujo de seguridad.
       e.preventDefault();
-
-      // Ocultar mensajes anteriores
       ocultarMensaje();
 
-      // Obtener valores crudos antes de cualquier procesamiento
       const usuarioCrudo = campoUsuario.value;
       const claveCruda = campoClave.value;
-
-      // Identificador para logging (si el usuario está vacío, usar "desconocido")
       const idLog = usuarioCrudo.trim() || 'desconocido';
 
       registrarEvento('info', idLog, 'Inicio de intento de autenticación');
@@ -636,7 +744,6 @@
       if (!resultUsuario.valido) {
         registrarEvento('advertencia', idLog,
           `Sanitización de usuario fallida: ${resultUsuario.razon}`);
-        // Mensaje opaco — no revelar el motivo específico al usuario
         mostrarMensaje('Credenciales inválidas.', 'error');
         registrarFallo(idLog);
         return;
@@ -647,7 +754,6 @@
       if (!resultClave.valido) {
         registrarEvento('advertencia', idLog,
           `Sanitización de clave fallida: ${resultClave.razon}`);
-        // Mensaje opaco — no revelar el motivo específico al usuario
         mostrarMensaje('Credenciales inválidas.', 'error');
         registrarFallo(idLog);
         return;
@@ -658,7 +764,6 @@
       if (!politica.cumple) {
         registrarEvento('advertencia', idLog,
           `Política de clave no cumplida: ${politica.razon}`);
-        // Mensaje opaco — no especificar qué requisito falta
         mostrarMensaje('Credenciales inválidas.', 'error');
         registrarFallo(idLog);
         return;
@@ -666,17 +771,23 @@
 
       // ── CAPA 4: Verificación de credenciales ──
       if (verificarCredenciales(resultUsuario.valor, resultClave.valor)) {
-        // ÉXITO — Reiniciar estado y notificar
         intentosFallidos = 0;
         registrarEvento('info', resultUsuario.valor,
           'Autenticación EXITOSA — Acceso concedido — ' +
           'Contador de intentos reiniciado');
-        mostrarMensaje('Acceso concedido. Bienvenido al sistema.', 'success');
+        mostrarMensaje('Acceso concedido. Redirigiendo al portal...', 'success');
 
-        // Limpiar campos tras autenticación exitosa
+        sessionStorage.setItem('medisecure_sesion', JSON.stringify({
+          usuario: resultUsuario.valor,
+          timestamp: new Date().toISOString()
+        }));
+
         formulario.reset();
+
+        setTimeout(function() {
+          window.location.href = 'index.html';
+        }, 1200);
       } else {
-        // FALLO — Mensaje opaco + registrar intento
         registrarEvento('advertencia', idLog,
           'Credenciales no coinciden — Autenticación denegada');
         mostrarMensaje('Credenciales inválidas.', 'error');
